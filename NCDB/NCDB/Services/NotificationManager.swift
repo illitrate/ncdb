@@ -195,6 +195,39 @@ final class NotificationManager: NSObject {
         }
     }
 
+    /// Send news notification with article count
+    func sendNewsNotification(articleCount: Int) async {
+        guard notificationsEnabled, isAuthorized else { return }
+        guard UserDefaults.standard.bool(forKey: "newsNotificationsEnabled") else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "📰 New Nicolas Cage News"
+        content.body = "\(articleCount) new article\(articleCount == 1 ? "" : "s") about Nicolas Cage"
+        content.sound = .default
+        content.categoryIdentifier = NotificationType.newsArticle.rawValue
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 0.1, repeats: false)
+
+        let request = UNNotificationRequest(
+            identifier: "news_batch_\(UUID().uuidString)",
+            content: content,
+            trigger: trigger
+        )
+
+        center.add(request) { error in
+            if let error = error {
+                Logger.shared.error("Failed to send news notification: \(error)", category: .general)
+            } else {
+                Logger.shared.info("News notification sent for \(articleCount) articles", category: .general)
+            }
+        }
+    }
+
+    /// Convenience method for requesting permission
+    func requestPermission() async {
+        _ = await requestAuthorization()
+    }
+
     // MARK: - Manage Notifications
 
     /// Remove all pending notifications

@@ -13,6 +13,7 @@ struct HomeView: View {
     @Query private var productions: [Production]
     @Query(filter: #Predicate<Production> { !$0.watched }) private var unwatchedProductions: [Production]
     @Query(sort: \Achievement.unlockedAt, order: .reverse) private var achievements: [Achievement]
+    @Query(sort: \NewsArticle.publishedDate, order: .reverse) private var newsArticles: [NewsArticle]
     @State private var viewModel = HomeViewModel()
 
     var body: some View {
@@ -135,6 +136,32 @@ struct HomeView: View {
                         }
                     }
 
+                    // News Preview
+                    if !recentNews.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            HStack {
+                                SectionHeader(title: "Latest News")
+                                Spacer()
+                                NavigationLink("See All") {
+                                    NewsView()
+                                }
+                                .font(.caption)
+                                .foregroundStyle(Color.cageGold)
+                                .padding(.trailing, Spacing.md)
+                            }
+
+                            VStack(spacing: Spacing.xs) {
+                                ForEach(recentNews) { article in
+                                    NewsRow(article: article) {
+                                        article.isRead = true
+                                        // Would navigate to article detail
+                                    }
+                                }
+                            }
+                            .padding(.horizontal, Spacing.md)
+                        }
+                    }
+
                     // Empty state
                     if viewModel.watchedCount == 0 {
                         EmptyStateView(
@@ -179,5 +206,9 @@ struct HomeView: View {
                     definition: definition
                 )
             }
+    }
+
+    private var recentNews: [NewsArticle] {
+        Array(newsArticles.prefix(3))
     }
 }
