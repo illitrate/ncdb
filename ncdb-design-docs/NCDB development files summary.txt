@@ -1,0 +1,98 @@
+NCDB development files summary
+------------------------------
+
+Priority 1: Must-Have Files (Start Here)
+
+File Name     Folder     Purpose
+ProjectBrief.md     01-Overview/     High-level app overview and goals
+DesignPhilosophy.md     01-Overview/     Liquid Glass aesthetic principles
+CoreModels.swift     02-DataModels/     Production, CastMember, WatchEvent models
+SupportingModels.swift     02-DataModels/     NewsArticle, Achievement, Preferences models
+ModelRelationships.md     02-DataModels/     Diagram of model connections
+TMDbService.swift     03-Services/     TMDb API integration and networking
+TMDbModels.swift     03-Services/     Response models for TMDb API
+CacheManager.swift     03-Services/     Three-tier cache system implementation
+LiquidGlassComponents.swift     05-Views/     Reusable glass UI components
+ColorPalette.swift     07-DesignSystem/     All color definitions and tokens
+Constants.swift     07-DesignSystem/     App-wide constants (IDs, sizes, etc.)
+
+Priority 2: Important Supporting Files
+
+File Name     Folder     Purpose
+HomeViewModel.swift     04-ViewModels/     Home screen business logic
+MovieListViewModel.swift     04-ViewModels/     Movie list filtering and sorting
+MovieDetailViewModel.swift     04-ViewModels/     Single movie detail management
+RankingViewModel.swift     04-ViewModels/     Ranking carousel logic
+StatsViewModel.swift     04-ViewModels/     Statistics calculations
+ViewArchitecture.md     05-Views/     Overview of view hierarchy
+CustomComponents.swift     05-Views/     StarRating, MoviePosterCard, etc.
+HomeView.swift     05-Views/Home/     Dashboard/home screen implementation
+MovieListView.swift     05-Views/MovieList/     Scrollable movie list with filters
+MovieDetailView.swift     05-Views/MovieDetail/     Full movie detail screen
+RankingsView.swift     05-Views/Rankings/     Interactive ranking interface
+StatsView.swift     05-Views/Stats/     Statistics dashboard with charts
+SettingsView.swift     05-Views/Settings/     App settings and preferences
+OnboardingFlow.md     06-Features/     Complete onboarding specification
+OnboardingCoordinator.swift     05-Views/Onboarding/     Onboarding screen
+coordinator
+RankingSystem.md     06-Features/     Drag-and-drop ranking implementation
+RankingCarousel.swift     05-Views/Rankings/     Interactive carousel component
+WidgetSpecifications.md     06-Features/     All widget sizes and content
+NCDBWidgets.swift     Widgets/     WidgetKit extension implementation
+AchievementsSystem.md     06-Features/     Complete achievement list and logic
+AchievementManager.swift     03-Services/     Achievement tracking and unlocking
+AchievementViews.swift     05-Views/     Achievement cards and notifications
+SocialSharing.md     06-Features/     Share templates and specifications
+SocialSharingService.swift     03-Services/     Image generation and sharing logic
+ShareTemplates.swift     03-Services/     Template generators for social posts
+NewsScraperService.swift     03-Services/     RSS feed parsing and filtering
+NewsSource.swift     03-Services/     News source enumeration
+NewsViews.swift     05-Views/     News feed UI components
+ExportService.swift     03-Services/     HTML/JSON export functionality
+ExportTemplates.swift     03-Services/     HTML/CSS template definitions
+Typography.swift     07-DesignSystem/     Font styles and text modifiers
+Spacing.swift     07-DesignSystem/     Consistent spacing/padding values
+AnimationGuidelines.md     07-DesignSystem/     Animation specs and best practices
+TMDbIntegration.md     08-Integration/     TMDb setup and API key instructions
+WebsiteExport.md     08-Integration/     Static site generation workflow
+
+Priority 3: Polish & Documentation Files
+
+File Name     Folder     Purpose
+SettingsStructure.md     06-Features/     Complete settings screen organization
+PreferencesManager.swift     03-Services/     User preference storage and retrieval
+SearchFilterView.swift     05-Views/     Search and filter UI components
+SearchViewModel.swift     04-ViewModels/     Search and filter logic
+CustomTagsView.swift     05-Views/     Tag management interface
+TagManager.swift     03-Services/     Tag creation and organization
+ImageCacheManager.swift     03-Services/     Poster/backdrop image caching
+KeychainHelper.swift     Utilities/     Secure API key storage
+DateExtensions.swift     Utilities/Extensions/     Date formatting helpers
+ViewExtensions.swift     Utilities/Extensions/     SwiftUI view modifiers
+StringExtensions.swift     Utilities/Extensions/     String manipulation helpers
+ErrorHandling.swift     Utilities/     Centralized error types and handling
+Logger.swift     Utilities/     Custom logging for debugging
+NetworkMonitor.swift     Utilities/     Network connectivity monitoring
+HapticManager.swift     Utilities/     Haptic feedback coordination
+AppDelegate.swift     App/     UIKit lifecycle if needed
+NCDBApp.swift     App/     SwiftUI app entry point
+LaunchScreen.swift     App/     Custom launch screen view
+WidgetTimelineProvider.swift     Widgets/     Widget update scheduling
+WidgetViews.swift     Widgets/     Widget UI components
+AppGroups.swift     Widgets/     Shared data configuration
+NotificationManager.swift     03-Services/     Local notification scheduling
+DeepLinkHandler.swift     Utilities/     URL scheme and deep link routing
+FTPUploader.swift     08-Integration/     FTP file upload implementation
+StrapiIntegration.swift     08-Integration/     Strapi CMS API client
+FTPConfiguration.md     08-Integration/     FTP server setup instructions
+TestingStrategy.md     09-Testing/     Unit and UI testing approach
+TestScenarios.md     09-Testing/     Key test cases and edge cases
+CoreModelsTests.swift     09-Testing/     Data model unit tests
+TMDbServiceTests.swift     09-Testing/     API service unit tests
+ViewModelTests.swift     09-Testing/     ViewModel unit tests
+UITests.swift     09-Testing/     SwiftUI UI test suite
+AccessibilityTests.swift     09-Testing/     VoiceOver and accessibility tests
+PerformanceTests.swift     09-Testing/     Performance benchmarking
+SeedData.json     Resources/PreloadedData/     Bundled Face/Off and Con Air data
+face_off.json     Resources/PreloadedData/     Face/Off movie details
+con_air.json     Resources/PreloadedData/     Con Air movie details
