@@ -8,17 +8,33 @@ import SwiftData
 @Model
 final class WatchEvent {
     @Attribute(.unique) var id: UUID
-    var watchedDate: Date
-    var location: String? // e.g., "Home", "Cinema"
+    var watchedAt: Date
+    var location: String?
+    var companions: [String]
+    var mood: String?
     var notes: String?
-    var mood: String? // How you felt during/after
+    var rating: Double?
 
     // Relationship
     var production: Production?
 
-    init(watchedDate: Date = Date()) {
+    init(
+        production: Production? = nil,
+        watchedAt: Date = Date(),
+        location: String? = nil,
+        companions: [String] = [],
+        mood: String? = nil,
+        notes: String? = nil,
+        rating: Double? = nil
+    ) {
         self.id = UUID()
-        self.watchedDate = watchedDate
+        self.production = production
+        self.watchedAt = watchedAt
+        self.location = location
+        self.companions = companions
+        self.mood = mood
+        self.notes = notes
+        self.rating = rating
     }
 }
 
@@ -26,16 +42,16 @@ final class WatchEvent {
 extension WatchEvent {
     /// Formatted date string
     var formattedDate: String {
-        watchedDate.formatted(date: .abbreviated, time: .omitted)
+        watchedAt.formatted(date: .abbreviated, time: .omitted)
     }
 
     /// Check if watched today
     var isToday: Bool {
-        Calendar.current.isDateInToday(watchedDate)
+        Calendar.current.isDateInToday(watchedAt)
     }
 
     /// Check if watched this week
     var isThisWeek: Bool {
-        Calendar.current.isDate(watchedDate, equalTo: Date(), toGranularity: .weekOfYear)
+        Calendar.current.isDate(watchedAt, equalTo: Date(), toGranularity: .weekOfYear)
     }
 }

@@ -249,7 +249,7 @@ final class DataManager {
         }
 
         let descriptor = FetchDescriptor<WatchEvent>(
-            sortBy: [SortDescriptor(\.watchedDate, order: .reverse)]
+            sortBy: [SortDescriptor(\.watchedAt, order: .reverse)]
         )
 
         return try context.fetch(descriptor)
@@ -261,10 +261,7 @@ final class DataManager {
             throw DataManagerError.notConfigured
         }
 
-        let event = WatchEvent(watchedDate: date)
-        event.location = location
-        event.notes = notes
-        event.production = production
+        let event = WatchEvent(production: production, watchedAt: date, location: location, notes: notes)
 
         production.watchEvents.append(event)
         production.watched = true
