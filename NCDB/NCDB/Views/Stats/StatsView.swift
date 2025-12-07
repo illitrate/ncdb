@@ -7,10 +7,12 @@
 
 import SwiftUI
 import SwiftData
+import Charts
 
 /// Stats/analytics view
 struct StatsView: View {
     @Query private var productions: [Production]
+    @State private var viewModel = StatsViewModel()
 
     private var watchedProductions: [Production] {
         productions.filter { $0.watched }
@@ -34,98 +36,196 @@ struct StatsView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: Spacing.lg) {
-                    // Overview stats
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
-                        StatCard(
-                            title: "Watched",
-                            value: "\(watchedProductions.count)",
-                            icon: "eye.fill",
-                            color: .green
-                        )
-
-                        StatCard(
-                            title: "Total Movies",
-                            value: "\(productions.count)",
-                            icon: "film.fill",
-                            color: .blue
-                        )
-
-                        StatCard(
-                            title: "Avg Rating",
-                            value: String(format: "%.1f ★", averageRating),
-                            icon: "star.fill",
-                            color: .cageGold
-                        )
-
-                        StatCard(
-                            title: "Favorites",
-                            value: "\(favoriteCount)",
-                            icon: "heart.fill",
-                            color: .red
-                        )
-
-                        StatCard(
-                            title: "Runtime",
-                            value: FormatHelper.totalRuntime(totalRuntime),
-                            icon: "clock.fill",
-                            color: .purple
-                        )
-
-                        StatCard(
-                            title: "Completion",
-                            value: String(format: "%.0f%%", Double(watchedProductions.count) / Double(max(productions.count, 1)) * 100),
-                            icon: "chart.pie.fill",
-                            color: .orange
-                        )
-                    }
-
-                    // Genre breakdown
-                    if !watchedProductions.isEmpty {
-                        VStack(alignment: .leading, spacing: Spacing.sm) {
-                            SectionHeader(title: "Top Genres")
-
-                            GenreBreakdownView(productions: watchedProductions)
-                        }
-                    }
+                    statsGrid
+                    chartsSection
                 }
                 .padding(Spacing.md)
             }
             .background(Color.primaryBackground)
             .navigationTitle("Stats")
+            .task {
+                await viewModel.loadStatistics(productions: productions)
+            }
+        }
+    }
+
+    private var statsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
+            StatCard(
+                title: "Watched",
+                value: "\(watchedProductions.count)",
+                icon: "eye.fill",
+                color: .green
+            )
+
+            StatCard(
+                title: "Total Movies",
+                value: "\(productions.count)",
+                icon: "film.fill",
+                color: .blue
+            )
+
+            StatCard(
+                title: "Avg Rating",
+                value: String(format: "%.1f ★", averageRating),
+                icon: "star.fill",
+                color: .cageGold
+            )
+
+            StatCard(
+                title: "Favorites",
+                value: "\(favoriteCount)",
+                icon: "heart.fill",
+                color: .red
+            )
+
+            StatCard(
+                title: "Runtime",
+                value: FormatHelper.totalRuntime(totalRuntime),
+                icon: "clock.fill",
+                color: .purple
+            )
+
+            StatCard(
+                title: "Completion",
+                value: String(format: "%.0f%%", Double(watchedProductions.count) / Double(max(productions.count, 1)) * 100),
+                icon: "chart.pie.fill",
+                color: .orange
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var chartsSection: some View {
+        // Watch activity chart
+        if !viewModel.recentMonthsData.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader(title: "Watch Activity (Last 6 Months)")
+                WatchActivityChart(data: viewModel.recentMonthsData)
+            }
+        }
+
+        // Genre breakdown chart
+        if !viewModel.topGenres.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader(title: "Top Genres")
+                GenreChartView(data: viewModel.topGenres)
+            }
+        }
+
+        // Rating distribution
+        if !viewModel.ratingDistribution.isEmpty {
+            VStack(alignment: .leading, spacing: Spacing.sm) {
+                SectionHeader(title: "Rating Distribution")
+                RatingDistributionChart(data: Array(viewModel.ratingDistribution.sorted { $0.key < $1.key }))
+            }
         }
     }
 }
 
-struct GenreBreakdownView: View {
-    let productions: [Production]
+// MARK: - Chart Components
 
-    private var genreCounts: [(String, Int)] {
-        var counts: [String: Int] = [:]
-        for production in productions {
-            for genre in production.genres {
-                counts[genre, default: 0] += 1
-            }
-        }
-        return counts.sorted { $0.value > $1.value }.prefix(5).map { ($0.key, $0.value) }
-    }
+struct WatchActivityChart: View {
+    let data: [(Date, Int)]
 
     var body: some View {
-        VStack(spacing: Spacing.sm) {
-            ForEach(genreCounts, id: \.0) { genre, count in
-                HStack {
-                    Text(genre)
-                        .font(.subheadline)
-                        .foregroundStyle(Color.primaryText)
+        Chart {
+            ForEach(Array(data.enumerated()), id: \.offset) { _, item in
+                let (date, count) = item
+                BarMark(
+                    x: .value("Month", date, unit: .month),
+                    y: .value("Watches", count)
+                )
+                .foregroundStyle(Color.cageGold.gradient)
+                .cornerRadius(4)
+            }
+        }
+        .frame(height: 200)
+        .padding(Spacing.md)
+        .background(Color.glassLight)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .chartYAxis {
+            AxisMarks(position: .leading)
+        }
+        .chartXAxis {
+            AxisMarks { _ in
+                AxisValueLabel(format: .dateTime.month(.narrow))
+            }
+        }
+    }
+}
 
-                    Spacer()
+struct GenreChartView: View {
+    let data: [(String, Int)]
 
-                    Text("\(count)")
-                        .font(.subheadline.bold())
-                        .foregroundStyle(Color.cageGold)
+    var body: some View {
+        Chart {
+            ForEach(data, id: \.0) { genre, count in
+                BarMark(
+                    x: .value("Count", count),
+                    y: .value("Genre", genre)
+                )
+                .foregroundStyle(Color.cageGold.gradient)
+                .cornerRadius(4)
+            }
+        }
+        .frame(height: CGFloat(data.count) * 40 + 40)
+        .padding(Spacing.md)
+        .background(Color.glassLight)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .chartXAxis {
+            AxisMarks(position: .bottom)
+        }
+        .chartYAxis {
+            AxisMarks(position: .leading) { value in
+                AxisValueLabel {
+                    if let genre = value.as(String.self) {
+                        Text(genre)
+                            .font(.caption)
+                            .foregroundStyle(Color.primaryText)
+                    }
                 }
-                .padding(Spacing.sm)
-                .background(Color.glassLight)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+}
+
+struct RatingDistributionChart: View {
+    let data: [(Int, Int)]
+
+    var body: some View {
+        Chart {
+            ForEach(data, id: \.0) { rating, count in
+                BarMark(
+                    x: .value("Rating", "\(rating)★"),
+                    y: .value("Count", count)
+                )
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [Color.cageGold.opacity(0.6), Color.cageGold],
+                        startPoint: .bottom,
+                        endPoint: .top
+                    )
+                )
+                .cornerRadius(4)
+            }
+        }
+        .frame(height: 180)
+        .padding(Spacing.md)
+        .background(Color.glassLight)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .chartYAxis {
+            AxisMarks(position: .leading)
+        }
+        .chartXAxis {
+            AxisMarks { value in
+                AxisValueLabel {
+                    if let rating = value.as(String.self) {
+                        Text(rating)
+                            .font(.caption)
+                            .foregroundStyle(Color.primaryText)
+                    }
+                }
             }
         }
     }

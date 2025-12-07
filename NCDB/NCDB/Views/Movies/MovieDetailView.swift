@@ -124,6 +124,14 @@ struct MovieDetailView: View {
                             InfoRow(label: "Box Office", value: boxOffice)
                         }
                     }
+
+                    // Watch History
+                    if production.watched {
+                        Divider()
+                            .padding(.vertical, Spacing.sm)
+
+                        WatchHistorySection(production: production)
+                    }
                 }
                 .padding(.horizontal, Spacing.md)
             }

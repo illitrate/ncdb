@@ -212,31 +212,28 @@ final class ImportService {
 
         let descriptor = FetchDescriptor<Achievement>()
         let existingAchievements = try context.fetch(descriptor)
-        let existingByID = Dictionary(uniqueKeysWithValues: existingAchievements.map { ($0.id, $0) })
+        let existingByAchievementID = Dictionary(uniqueKeysWithValues: existingAchievements.map { ($0.achievementID, $0) })
 
         for achievementExport in achievements {
-            if let existing = existingByID[achievementExport.id] {
+            if let existing = existingByAchievementID[achievementExport.achievementID] {
                 // Achievement exists - handle conflict
                 switch resolution {
                 case .keepExisting:
                     continue
                 case .overwrite:
-                    existing.unlockedDate = achievementExport.unlockedDate
-                    existing.progress = achievementExport.progress
+                    existing.unlockedAt = achievementExport.unlockedAt
                 case .merge:
-                    // Keep the earliest unlock date and highest progress
-                    if let importedUnlock = achievementExport.unlockedDate {
-                        if let existingUnlock = existing.unlockedDate {
-                            existing.unlockedDate = min(importedUnlock, existingUnlock)
-                        } else {
-                            existing.unlockedDate = importedUnlock
-                        }
-                    }
-                    existing.progress = max(existing.progress, achievementExport.progress)
+                    // Keep the earliest unlock date
+                    existing.unlockedAt = min(existing.unlockedAt, achievementExport.unlockedAt)
                 }
+            } else {
+                // New unlocked achievement - import it
+                let achievement = Achievement(
+                    achievementID: achievementExport.achievementID,
+                    unlockedAt: achievementExport.unlockedAt
+                )
+                context.insert(achievement)
             }
-            // Note: We don't create new achievements from imports
-            // They should be predefined in the app
         }
     }
 

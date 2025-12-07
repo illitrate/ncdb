@@ -58,9 +58,8 @@ final class ExportService {
     }
 
     struct AchievementExport: Codable {
-        let id: String
-        let unlockedDate: Date?
-        let progress: Double
+        let achievementID: String
+        let unlockedAt: Date
     }
 
     // MARK: - JSON Export
@@ -176,9 +175,8 @@ final class ExportService {
 
         let achievementExports = achievements.map { achievement in
             AchievementExport(
-                id: achievement.id,
-                unlockedDate: achievement.unlockedDate,
-                progress: achievement.progress
+                achievementID: achievement.achievementID,
+                unlockedAt: achievement.unlockedAt
             )
         }
 

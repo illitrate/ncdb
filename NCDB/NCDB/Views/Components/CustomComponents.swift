@@ -99,49 +99,62 @@ struct MoviePosterCard: View {
     }
 
     var body: some View {
-        Button(action: { onTap?() }) {
-            VStack(alignment: .leading, spacing: Spacing.xs) {
-                // Poster Image
-                posterImage
-                    .frame(width: size.width, height: size.height)
-                    .clipShape(RoundedRectangle(cornerRadius: Sizes.cornerRadiusMedium))
-                    .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
-
-                // Title & Metadata
-                if showTitle || showYear || showRating {
-                    VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                        if showTitle {
-                            Text(movie.title)
-                                .font(Typography.movieTitle)
-                                .foregroundStyle(Color.primaryText)
-                                .lineLimit(2)
-                        }
-
-                        HStack(spacing: Spacing.xs) {
-                            if showYear {
-                                Text(String(movie.releaseYear))
-                                    .font(Typography.movieMeta)
-                                    .foregroundStyle(Color.secondaryText)
-                            }
-
-                            if showRating, let rating = movie.userRating {
-                                HStack(spacing: 2) {
-                                    Image(systemName: "star.fill")
-                                        .font(.caption2)
-                                    Text(String(format: "%.1f", rating))
-                                        .font(Typography.movieMeta)
-                                }
-                                .foregroundStyle(Color.cageGold)
-                            }
-                        }
-                    }
-                    .frame(width: size.width, alignment: .leading)
+        Group {
+            if let onTap = onTap {
+                // Use Button only when onTap is provided
+                Button(action: onTap) {
+                    cardContent
                 }
+                .buttonStyle(.plain)
+            } else {
+                // No button wrapper - allows NavigationLink to work
+                cardContent
             }
         }
-        .buttonStyle(.plain)
         .accessibilityLabel("\(movie.title), \(movie.releaseYear)")
         .accessibilityHint("Double tap to view details")
+    }
+
+    @ViewBuilder
+    private var cardContent: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            // Poster Image
+            posterImage
+                .frame(width: size.width, height: size.height)
+                .clipShape(RoundedRectangle(cornerRadius: Sizes.cornerRadiusMedium))
+                .shadow(color: .black.opacity(0.3), radius: 8, x: 0, y: 4)
+
+            // Title & Metadata
+            if showTitle || showYear || showRating {
+                VStack(alignment: .leading, spacing: Spacing.xxxs) {
+                    if showTitle {
+                        Text(movie.title)
+                            .font(Typography.movieTitle)
+                            .foregroundStyle(Color.primaryText)
+                            .lineLimit(2)
+                    }
+
+                    HStack(spacing: Spacing.xs) {
+                        if showYear {
+                            Text(String(movie.releaseYear))
+                                .font(Typography.movieMeta)
+                                .foregroundStyle(Color.secondaryText)
+                        }
+
+                        if showRating, let rating = movie.userRating {
+                            HStack(spacing: 2) {
+                                Image(systemName: "star.fill")
+                                    .font(.caption2)
+                                Text(String(format: "%.1f", rating))
+                                    .font(Typography.movieMeta)
+                            }
+                            .foregroundStyle(Color.cageGold)
+                        }
+                    }
+                }
+                .frame(width: size.width, alignment: .leading)
+            }
+        }
     }
 
     @ViewBuilder

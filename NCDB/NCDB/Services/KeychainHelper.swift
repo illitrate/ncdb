@@ -201,6 +201,7 @@ enum KeychainKey: String {
     case userToken = "com.ncdb.user.token"
     case encryptionKey = "com.ncdb.encryption.key"
     case biometricToken = "com.ncdb.biometric.token"
+    case ftpPassword = "com.ncdb.ftp.password"
 }
 
 // MARK: - Errors

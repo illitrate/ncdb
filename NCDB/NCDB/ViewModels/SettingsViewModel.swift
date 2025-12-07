@@ -52,6 +52,11 @@ final class SettingsViewModel {
         set { NotificationManager.shared.notificationsEnabled = newValue }
     }
 
+    var achievementNotificationsEnabled: Bool {
+        get { NotificationManager.shared.achievementNotificationsEnabled }
+        set { NotificationManager.shared.achievementNotificationsEnabled = newValue }
+    }
+
     /// Services
     private let dataManager = DataManager.shared
     private var tmdbService: TMDbService?

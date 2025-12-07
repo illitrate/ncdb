@@ -11,6 +11,8 @@ import SwiftData
 /// Home/Dashboard view
 struct HomeView: View {
     @Query private var productions: [Production]
+    @Query(filter: #Predicate<Production> { !$0.watched }) private var unwatchedProductions: [Production]
+    @Query(sort: \Achievement.unlockedAt, order: .reverse) private var achievements: [Achievement]
     @State private var viewModel = HomeViewModel()
 
     var body: some View {
@@ -76,6 +78,63 @@ struct HomeView: View {
                         }
                     }
 
+                    // Recent Achievements
+                    if !recentAchievements.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            HStack {
+                                SectionHeader(title: "Recent Achievements")
+                                Spacer()
+                                NavigationLink("See All") {
+                                    AchievementsView()
+                                }
+                                .font(.caption)
+                                .foregroundStyle(Color.cageGold)
+                                .padding(.trailing, Spacing.md)
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: Spacing.md) {
+                                    ForEach(recentAchievements) { achievementWithDef in
+                                        CompactAchievementBadge(
+                                            definition: achievementWithDef.definition,
+                                            isUnlocked: true,
+                                            unlockedAt: achievementWithDef.achievement.unlockedAt
+                                        )
+                                        .frame(width: 280)
+                                    }
+                                }
+                                .padding(.horizontal, Spacing.md)
+                            }
+                        }
+                    }
+
+                    // Watchlist Preview
+                    if !unwatchedProductions.isEmpty {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            HStack {
+                                SectionHeader(title: "Watchlist")
+                                Spacer()
+                                NavigationLink("See All") {
+                                    WatchlistView()
+                                }
+                                .font(.caption)
+                                .foregroundStyle(Color.cageGold)
+                                .padding(.trailing, Spacing.md)
+                            }
+
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: Spacing.sm) {
+                                    ForEach(unwatchedProductions.prefix(10)) { production in
+                                        NavigationLink(value: production) {
+                                            MoviePosterCard(movie: production, size: .medium)
+                                        }
+                                    }
+                                }
+                                .padding(.horizontal, Spacing.md)
+                            }
+                        }
+                    }
+
                     // Empty state
                     if viewModel.watchedCount == 0 {
                         EmptyStateView(
@@ -100,5 +159,25 @@ struct HomeView: View {
                 await viewModel.loadDashboardData(productions: productions)
             }
         }
+    }
+
+    // MARK: - Helper Properties
+
+    private var recentAchievements: [AchievementWithDefinition] {
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+
+        return achievements
+            .filter { $0.unlockedAt >= sevenDaysAgo }
+            .prefix(5)
+            .compactMap { achievement in
+                guard let definition = AchievementManager.shared.allAchievements.first(
+                    where: { $0.id == achievement.achievementID }
+                ) else { return nil }
+
+                return AchievementWithDefinition(
+                    achievement: achievement,
+                    definition: definition
+                )
+            }
     }
 }

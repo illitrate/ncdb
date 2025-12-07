@@ -30,6 +30,12 @@ final class NotificationManager: NSObject {
         set { UserDefaults.standard.set(newValue, forKey: "notificationsEnabled") }
     }
 
+    /// Achievement notifications enabled preference
+    var achievementNotificationsEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: "achievementNotificationsEnabled") }
+        set { UserDefaults.standard.set(newValue, forKey: "achievementNotificationsEnabled") }
+    }
+
     // MARK: - Notification Types
 
     enum NotificationType: String {
@@ -81,7 +87,7 @@ final class NotificationManager: NSObject {
 
     /// Schedule an achievement unlock notification
     func scheduleAchievementNotification(title: String, description: String, achievementId: String) {
-        guard notificationsEnabled, isAuthorized else { return }
+        guard notificationsEnabled, achievementNotificationsEnabled, isAuthorized else { return }
 
         let content = UNMutableNotificationContent()
         content.title = "🏆 Achievement Unlocked!"

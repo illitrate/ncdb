@@ -11,6 +11,7 @@ import SwiftUI
 struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var showingAPIKeySheet = false
+    @State private var showingClearDataConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -54,6 +55,8 @@ struct SettingsView: View {
                 Section("Preferences") {
                     Toggle("Haptic Feedback", isOn: $viewModel.hapticsEnabled)
                     Toggle("Notifications", isOn: $viewModel.notificationsEnabled)
+                    Toggle("Achievement Notifications", isOn: $viewModel.achievementNotificationsEnabled)
+                        .disabled(!viewModel.notificationsEnabled)
                 }
 
                 // Cache
@@ -73,6 +76,22 @@ struct SettingsView: View {
                     .disabled(viewModel.isClearingCache)
                 }
 
+                // Developer/Debug
+                Section("Developer Tools") {
+                    Button {
+                        DataSeeder.shared.seedSampleMovies()
+                    } label: {
+                        Label("Seed Sample Data", systemImage: "leaf.fill")
+                    }
+
+                    Button(role: .destructive) {
+                        showingClearDataConfirmation = true
+                    } label: {
+                        Label("Clear All Data", systemImage: "trash.fill")
+                    }
+                }
+                .foregroundStyle(.blue)
+
                 // About
                 Section("About") {
                     HStack {
@@ -86,6 +105,18 @@ struct SettingsView: View {
             .navigationTitle("Settings")
             .sheet(isPresented: $showingAPIKeySheet) {
                 APIKeySheet(viewModel: viewModel)
+            }
+            .confirmationDialog(
+                "Clear All Data",
+                isPresented: $showingClearDataConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Clear All Data", role: .destructive) {
+                    DataSeeder.shared.clearAllData()
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This will permanently delete all movies, watch events, and achievements. This cannot be undone.")
             }
         }
     }

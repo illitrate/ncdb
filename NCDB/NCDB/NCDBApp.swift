@@ -35,7 +35,23 @@ struct NCDBApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            fatalError("Could not create ModelContainer: \(error)")
+            // If migration fails (e.g., schema changed), delete old database and create fresh one
+            Logger.shared.warning("ModelContainer creation failed, attempting recovery: \(error)", category: .database)
+
+            // Delete the old database files
+            let url = modelConfiguration.url
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("sqlite-shm"))
+            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("sqlite-wal"))
+
+            // Try creating a fresh container
+            do {
+                let freshContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
+                Logger.shared.info("ModelContainer recreated successfully", category: .database)
+                return freshContainer
+            } catch {
+                fatalError("Could not create ModelContainer even after cleanup: \(error)")
+            }
         }
     }()
 
@@ -54,9 +70,17 @@ struct NCDBApp: App {
             .tint(.cageGold)
             .onAppear {
                 configureAppearance()
+                configureDataManager()
             }
         }
         .modelContainer(sharedModelContainer)
+    }
+
+    // MARK: - Data Manager Configuration
+
+    private func configureDataManager() {
+        DataManager.shared.configure(with: sharedModelContainer)
+        Logger.shared.info("DataManager configured with ModelContainer", category: .general)
     }
 
     // MARK: - Appearance Configuration
