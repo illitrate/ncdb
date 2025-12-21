@@ -28,9 +28,23 @@ final class SettingsViewModel {
     var isClearingCache = false
 
     /// Data sync
-    var lastSyncDate: Date?
     var isSyncing = false
     var syncProgress: Double = 0
+
+    /// Last sync date - persisted in UserDefaults
+    private let lastSyncDateKey = "lastTMDbSyncDate"
+    var lastSyncDate: Date? {
+        get {
+            UserDefaults.standard.object(forKey: lastSyncDateKey) as? Date
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: lastSyncDateKey)
+        }
+    }
+
+    /// Timestamp for triggering relative time updates
+    private var currentTime = Date()
+    private var updateTimer: Timer?
 
     /// App info
     var appVersion: String {
@@ -74,6 +88,23 @@ final class SettingsViewModel {
         Task {
             await loadCacheSize()
         }
+        startTimeUpdateTimer()
+    }
+
+    /// Start timer to update relative time display
+    private func startTimeUpdateTimer() {
+        // Update every 30 seconds to keep relative times fresh
+        updateTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                self.currentTime = Date()
+            }
+        }
+    }
+
+    /// Manually refresh the time (called when view appears)
+    func refreshTimeDisplay() {
+        currentTime = Date()
     }
 
     // MARK: - API Key Management
@@ -83,6 +114,34 @@ final class SettingsViewModel {
         if let savedKey = keychainHelper.getTMDbAPIKey() {
             apiKey = savedKey
         }
+    }
+
+    /// Refresh API key from keychain (public method for view updates)
+    func refreshAPIKey() {
+        // Check if key exists in Keychain
+        let exists = keychainHelper.exists(forKey: .tmdbAPIKey)
+        Logger.shared.info("Keychain check - API key exists: \(exists)", category: .general)
+
+        loadAPIKey()
+        // Re-initialize TMDbService if API key exists
+        if let savedKey = keychainHelper.getTMDbAPIKey() {
+            tmdbService = TMDbService(apiKey: savedKey)
+            Logger.shared.info("✅ Refreshed API key from Keychain: \(savedKey.prefix(8))...", category: .general)
+        } else {
+            tmdbService = nil
+            Logger.shared.warning("⚠️ No API key found in Keychain during refresh (exists check: \(exists))", category: .general)
+
+            // Try to read with error handling
+            do {
+                let key = try keychainHelper.read(forKey: .tmdbAPIKey)
+                Logger.shared.info("Actually found key with throwing method: \(key.prefix(8))...", category: .general)
+                apiKey = key
+                tmdbService = TMDbService(apiKey: key)
+            } catch {
+                Logger.shared.error("Keychain read error: \(error.localizedDescription)", category: .general)
+            }
+        }
+        Logger.shared.info("API key state after refresh - isEmpty: \(apiKey.isEmpty), hasAPIKey: \(hasAPIKey)", category: .general)
     }
 
     /// Save API key to keychain
@@ -101,12 +160,24 @@ final class SettingsViewModel {
         if result.isValid {
             // Save to keychain
             do {
+                Logger.shared.info("Attempting to save API key to Keychain: \(apiKey.prefix(8))...", category: .general)
                 try keychainHelper.saveTMDbAPIKey(apiKey)
+                Logger.shared.info("TMDb API key saved successfully to Keychain", category: .general)
+
                 // Initialize TMDbService with new API key
                 tmdbService = TMDbService(apiKey: apiKey)
                 apiKeyValidationResult = .valid
                 HapticManager.shared.success()
-                Logger.shared.info("TMDb API key saved successfully", category: .general)
+
+                // Verify it was saved by reading it back
+                if let verified = keychainHelper.getTMDbAPIKey() {
+                    Logger.shared.info("Verified API key in Keychain: \(verified.prefix(8))...", category: .general)
+                } else {
+                    Logger.shared.error("WARNING: API key not found after save!", category: .general)
+                }
+
+                // Refresh to ensure state is updated
+                refreshAPIKey()
             } catch {
                 apiKeyValidationResult = .invalid("Failed to save API key: \(error.localizedDescription)")
                 HapticManager.shared.error()
@@ -157,7 +228,7 @@ final class SettingsViewModel {
 
     // MARK: - Data Sync
 
-    /// Sync data from TMDb
+    /// Sync data from TMDb - fetches extended details for all movies
     func syncFromTMDb() async {
         guard !apiKey.isEmpty else {
             Logger.shared.warning("Cannot sync: No API key configured", category: .tmdb)
@@ -178,22 +249,85 @@ final class SettingsViewModel {
         syncProgress = 0
 
         do {
-            // Fetch Nicolas Cage movies
-            syncProgress = 0.3
-            let movies = try await service.fetchNicolasCageMovies()
+            // Get all productions from database
+            Logger.shared.info("Starting TMDb sync for extended details", category: .tmdb)
+            let productions = try await dataManager.fetchAllProductions()
 
-            syncProgress = 0.6
-            Logger.shared.info("Fetched \(movies.count) movies from TMDb", category: .tmdb)
+            guard !productions.isEmpty else {
+                Logger.shared.warning("No movies in database to sync", category: .tmdb)
+                isSyncing = false
+                return
+            }
 
-            // Import into database
-            // This would be handled by DataManager in a real implementation
+            Logger.shared.info("Syncing details for \(productions.count) movies", category: .tmdb)
+
+            var successCount = 0
+            var failCount = 0
+
+            // Fetch details for each movie
+            for (index, production) in productions.enumerated() {
+                guard let tmdbID = production.tmdbID else {
+                    failCount += 1
+                    continue
+                }
+
+                do {
+                    // Fetch detailed information from TMDb
+                    let details = try await service.fetchMovieDetails(movieID: tmdbID)
+
+                    // Update production with extended details
+                    production.genres = details.genres.map { $0.name }
+                    production.runtime = details.runtime
+                    production.budget = details.budget
+                    production.boxOffice = details.revenue
+                    production.backdropPath = details.backdropPath
+
+                    // Extract director from crew
+                    if let director = details.credits?.crew?.first(where: { $0.job == "Director" }) {
+                        production.director = director.name
+                    }
+
+                    // Clear and repopulate cast members
+                    production.castMembers.removeAll()
+                    if let cast = details.credits?.cast {
+                        for castMember in cast.prefix(50) { // Limit to top 50
+                            let member = CastMember(
+                                name: castMember.name,
+                                character: castMember.character ?? "Unknown Role",
+                                profilePath: castMember.profilePath,
+                                order: castMember.order
+                            )
+                            production.castMembers.append(member)
+                        }
+                    }
+
+                    production.metadataFetched = true
+                    production.lastUpdated = Date()
+
+                    successCount += 1
+                    Logger.shared.info("✅ Synced: \(production.title)", category: .tmdb)
+
+                } catch {
+                    failCount += 1
+                    Logger.shared.error("Failed to sync \(production.title): \(error)", category: .tmdb)
+                }
+
+                // Update progress
+                syncProgress = Double(index + 1) / Double(productions.count)
+
+                // Small delay to respect rate limits (40 requests per 10 seconds)
+                try? await Task.sleep(nanoseconds: 250_000_000) // 0.25 seconds
+            }
+
+            // Save all changes
+            try await dataManager.save()
 
             syncProgress = 1.0
             lastSyncDate = Date()
             isSyncing = false
 
             HapticManager.shared.success()
-            Logger.shared.info("TMDb sync completed successfully", category: .tmdb)
+            Logger.shared.info("TMDb sync completed: \(successCount) success, \(failCount) failed", category: .tmdb)
         } catch {
             isSyncing = false
             syncProgress = 0
@@ -228,7 +362,7 @@ final class SettingsViewModel {
 
     /// Check if API key is configured
     var hasAPIKey: Bool {
-        !apiKey.isEmpty && keychainHelper.getTMDbAPIKey() != nil
+        !apiKey.isEmpty
     }
 
     /// Get API key status text
@@ -242,6 +376,9 @@ final class SettingsViewModel {
 
     /// Get last sync text
     var lastSyncText: String {
+        // Reference currentTime to trigger recalculation when timer fires
+        _ = currentTime
+
         guard let date = lastSyncDate else {
             return "Never"
         }

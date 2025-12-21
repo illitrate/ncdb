@@ -14,6 +14,7 @@ struct RankingsView: View {
     @State private var viewModel = RankingViewModel()
     @State private var showingAddSheet = false
     @State private var showingShareSheet = false
+    @State private var showAbout = false
     @State private var viewMode: ViewMode = .carousel
 
     enum ViewMode {
@@ -30,60 +31,83 @@ struct RankingsView: View {
                         message: "Start ranking your favorite Nicolas Cage movies!\n\nTap the + button to add movies to your rankings."
                     )
                 } else {
-                    ScrollView {
-                        VStack(spacing: Spacing.lg) {
-                            // Top 3 Podium
-                            if viewModel.topThree.count == 3 {
-                                PodiumView(
-                                    first: viewModel.firstPlace,
-                                    second: viewModel.secondPlace,
-                                    third: viewModel.thirdPlace
-                                )
-                                .padding(.horizontal, Spacing.md)
-                            }
-
-                            // View mode toggle
-                            Picker("View Mode", selection: $viewMode) {
-                                Label("Carousel", systemImage: "rectangle.stack.fill").tag(ViewMode.carousel)
-                                Label("List", systemImage: "list.bullet").tag(ViewMode.list)
-                            }
-                            .pickerStyle(.segmented)
-                            .padding(.horizontal, Spacing.md)
-
-                            // Rankings display
-                            if viewMode == .carousel {
-                                VStack(alignment: .leading, spacing: Spacing.sm) {
-                                    SectionHeader(title: "Your Rankings")
-                                    RankingCarousel(
-                                        viewModel: viewModel,
-                                        movies: viewModel.rankedMovies
+                    // Different layouts for carousel vs list mode
+                    if viewMode == .carousel {
+                        ScrollView {
+                            VStack(spacing: Spacing.lg) {
+                                // Top 3 Podium
+                                if viewModel.topThree.count == 3 {
+                                    PodiumView(
+                                        first: viewModel.firstPlace,
+                                        second: viewModel.secondPlace,
+                                        third: viewModel.thirdPlace
                                     )
-                                }
-                            } else {
-                                VStack(alignment: .leading, spacing: Spacing.sm) {
-                                    SectionHeader(title: "Your Rankings")
-                                        .padding(.horizontal, Spacing.md)
-
-                                    ForEach(Array(viewModel.rankedMovies.enumerated()), id: \.element.id) { index, movie in
-                                        NavigationLink(value: movie) {
-                                            RankingRow(production: movie, position: index + 1)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
                                     .padding(.horizontal, Spacing.md)
                                 }
+
+                                // View mode toggle
+                                Picker("View Mode", selection: $viewMode) {
+                                    Label("Carousel", systemImage: "rectangle.stack.fill").tag(ViewMode.carousel)
+                                    Label("List", systemImage: "list.bullet").tag(ViewMode.list)
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal, Spacing.md)
+
+                                // Carousel display
+                                VStack(alignment: .leading, spacing: Spacing.sm) {
+                                    SectionHeader(title: "Your Rankings")
+                                    RankingCarousel(viewModel: viewModel)
+                                }
                             }
+                            .padding(.vertical, Spacing.md)
                         }
-                        .padding(.vertical, Spacing.md)
+                    } else {
+                        // List mode - no ScrollView wrapper needed
+                        VStack(spacing: 0) {
+                            // Header with podium and picker
+                            VStack(spacing: Spacing.lg) {
+                                // Top 3 Podium
+                                if viewModel.topThree.count == 3 {
+                                    PodiumView(
+                                        first: viewModel.firstPlace,
+                                        second: viewModel.secondPlace,
+                                        third: viewModel.thirdPlace
+                                    )
+                                    .padding(.horizontal, Spacing.md)
+                                }
+
+                                // View mode toggle
+                                Picker("View Mode", selection: $viewMode) {
+                                    Label("Carousel", systemImage: "rectangle.stack.fill").tag(ViewMode.carousel)
+                                    Label("List", systemImage: "list.bullet").tag(ViewMode.list)
+                                }
+                                .pickerStyle(.segmented)
+                                .padding(.horizontal, Spacing.md)
+
+                                SectionHeader(title: "Your Rankings")
+                                    .padding(.horizontal, Spacing.md)
+                            }
+                            .padding(.vertical, Spacing.md)
+                            .background(Color.primaryBackground)
+
+                            // List takes remaining space
+                            RankingList(viewModel: viewModel)
+                        }
                     }
                 }
             }
             .background(Color.primaryBackground)
-            .navigationTitle("Rankings")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
             }
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    NCDBLogoView {
+                        showAbout = true
+                    }
+                }
+
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         showingAddSheet = true
@@ -126,6 +150,9 @@ struct RankingsView: View {
             .refreshable {
                 await viewModel.loadRankings(productions: productions)
             }
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
         }
     }
 }
@@ -195,22 +222,71 @@ struct RankingRow: View {
     let production: Production
     let position: Int
 
+    private var primaryGenre: String {
+        production.genres.first ?? "Unknown"
+    }
+
     var body: some View {
         HStack(spacing: Spacing.md) {
+            // Rank number
             Text("\(position)")
                 .font(.headline.bold())
                 .foregroundStyle(.cageGold)
                 .frame(width: 40)
 
-            Text(production.title)
-                .font(.body)
-                .foregroundStyle(Color.primaryText)
+            // Movie info
+            VStack(alignment: .leading, spacing: Spacing.xxs) {
+                // Title
+                Text(production.title)
+                    .font(.body)
+                    .foregroundStyle(Color.primaryText)
+                    .lineLimit(1)
+
+                // Metadata row
+                HStack(spacing: Spacing.xs) {
+                    // Release year (without thousands separator)
+                    Text(String(production.releaseYear))
+                        .font(.caption)
+                        .foregroundStyle(Color.secondaryText)
+
+                    // Rating
+                    if let rating = production.userRating, rating > 0 {
+                        Text("•")
+                            .foregroundStyle(Color.tertiaryText)
+                        HStack(spacing: 2) {
+                            Image(systemName: "star.fill")
+                                .font(.caption2)
+                            Text(String(format: "%.1f", rating))
+                                .font(.caption)
+                        }
+                        .foregroundStyle(Color.cageGold)
+                    }
+
+                    // Watch count
+                    if production.watchCount > 0 {
+                        Text("•")
+                            .foregroundStyle(Color.tertiaryText)
+                        HStack(spacing: 2) {
+                            Image(systemName: "eye.fill")
+                                .font(.caption2)
+                            Text("\(production.watchCount)")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(Color.secondaryText)
+                    }
+
+                    // Genre
+                    Text("•")
+                        .foregroundStyle(Color.tertiaryText)
+                    Text(primaryGenre)
+                        .font(.caption)
+                        .foregroundStyle(Color.secondaryText)
+                        .lineLimit(1)
+                }
+                .font(.caption)
+            }
 
             Spacer()
-
-            Text("\(production.releaseYear)")
-                .font(.caption)
-                .foregroundStyle(Color.secondaryText)
 
             Image(systemName: "chevron.right")
                 .font(.caption)

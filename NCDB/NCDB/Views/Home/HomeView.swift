@@ -15,6 +15,7 @@ struct HomeView: View {
     @Query(sort: \Achievement.unlockedAt, order: .reverse) private var achievements: [Achievement]
     @Query(sort: \NewsArticle.publishedDate, order: .reverse) private var newsArticles: [NewsArticle]
     @State private var viewModel = HomeViewModel()
+    @State private var showAbout = false
 
     var body: some View {
         NavigationStack {
@@ -175,7 +176,14 @@ struct HomeView: View {
                 .padding(.vertical, Spacing.md)
             }
             .background(Color.primaryBackground)
-            .navigationTitle("NCDB")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    NCDBLogoView {
+                        showAbout = true
+                    }
+                }
+            }
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
             }
@@ -185,6 +193,9 @@ struct HomeView: View {
             .refreshable {
                 await viewModel.loadDashboardData(productions: productions)
             }
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
         }
     }
 

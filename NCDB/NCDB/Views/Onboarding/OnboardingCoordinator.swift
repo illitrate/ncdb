@@ -37,9 +37,16 @@ struct OnboardingCoordinator: View {
                 })
                 .tag(1)
 
-                DataSeedingView(apiKey: apiKey, onComplete: {
-                    completeOnboarding()
-                })
+                DataSeedingView(
+                    apiKey: apiKey,
+                    onComplete: {
+                        completeOnboarding()
+                    },
+                    isCurrentPage: Binding(
+                        get: { currentStep == 2 },
+                        set: { _ in }
+                    )
+                )
                 .tag(2)
             }
             .tabViewStyle(.page(indexDisplayMode: .never))

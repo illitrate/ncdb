@@ -42,9 +42,17 @@ extension Date {
 
     /// Get relative time string (e.g., "2 hours ago", "Yesterday")
     func relativeTimeString() -> String {
+        let now = Date()
+        let interval = now.timeIntervalSince(self)
+
+        // Handle very recent dates (within 10 seconds)
+        if abs(interval) < 10 {
+            return "Just now"
+        }
+
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .full
-        return formatter.localizedString(for: self, relativeTo: Date())
+        return formatter.localizedString(for: self, relativeTo: now)
     }
 
     /// Check if date is today

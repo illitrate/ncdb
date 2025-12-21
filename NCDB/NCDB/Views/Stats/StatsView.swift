@@ -13,6 +13,7 @@ import Charts
 struct StatsView: View {
     @Query private var productions: [Production]
     @State private var viewModel = StatsViewModel()
+    @State private var showAbout = false
 
     private var watchedProductions: [Production] {
         productions.filter { $0.watched }
@@ -42,10 +43,20 @@ struct StatsView: View {
                 .padding(Spacing.md)
             }
             .background(Color.primaryBackground)
-            .navigationTitle("Stats")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    NCDBLogoView {
+                        showAbout = true
+                    }
+                }
+            }
             .task {
                 await viewModel.loadStatistics(productions: productions)
             }
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
         }
     }
 

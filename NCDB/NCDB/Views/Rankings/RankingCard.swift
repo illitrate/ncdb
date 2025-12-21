@@ -112,25 +112,38 @@ struct CompactRankingCard: View {
     let movie: Production
     let rank: Int
 
+    private var posterURL: URL? {
+        guard let posterPath = movie.posterPath else { return nil }
+        return URL(string: "\(TMDbConstants.imageBaseURL)/w342\(posterPath)")
+    }
+
     var body: some View {
         VStack(spacing: Spacing.xs) {
-            // Poster placeholder
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.glassLight)
-                .frame(width: 120, height: 180)
-                .overlay(
-                    VStack {
-                        Image(systemName: "film.fill")
-                            .font(.largeTitle)
-                            .foregroundStyle(Color.tertiaryText)
-                        Text(movie.title)
-                            .font(.caption)
-                            .foregroundStyle(Color.primaryText)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(3)
-                            .padding(.horizontal, Spacing.xs)
-                    }
-                )
+            // Movie Poster
+            CachedAsyncImage(url: posterURL, placeholder: {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.glassLight)
+                    .frame(width: 120, height: 180)
+                    .overlay(
+                        VStack {
+                            Image(systemName: "film.fill")
+                                .font(.largeTitle)
+                                .foregroundStyle(Color.tertiaryText)
+                            Text(movie.title)
+                                .font(.caption)
+                                .foregroundStyle(Color.primaryText)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(3)
+                                .padding(.horizontal, Spacing.xs)
+                        }
+                    )
+            }, content: { image in
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+            })
+            .frame(width: 120, height: 180)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
 
             // Rank badge
             ZStack {

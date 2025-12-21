@@ -47,18 +47,52 @@ final class MovieDetailViewModel {
 
     // MARK: - Actions
 
-    /// Toggle watched status
-    func toggleWatched() {
-        production.watched.toggle()
+    /// Mark as watched (adds a new watch event)
+    func markAsWatched() {
+        // Create a new watch event with current rating if available
+        let watchEvent = WatchEvent(
+            production: production,
+            watchedAt: Date()
+        )
 
-        if production.watched && production.dateWatched == nil {
-            production.dateWatched = Date()
-            production.watchCount += 1
+        // Save the current rating with this watch event
+        if let currentRating = production.userRating, currentRating > 0 {
+            watchEvent.rating = currentRating
+        }
+
+        production.watchEvents.append(watchEvent)
+
+        // Update production state
+        production.watched = true
+        production.dateWatched = Date()
+        production.watchCount = production.watchEvents.count
+
+        dataManager.saveQuietly()
+        HapticManager.shared.success()
+        Logger.shared.info("Marked as watched: \(production.title) (total: \(production.watchCount))", category: .ui)
+    }
+
+    /// Unmark as watched (removes the most recent watch event)
+    func unmarkAsWatched() {
+        guard !production.watchEvents.isEmpty else { return }
+
+        // Remove the most recent watch event
+        if let lastEvent = production.watchEvents.last {
+            production.watchEvents.removeLast()
+        }
+
+        // Update production state
+        production.watchCount = production.watchEvents.count
+        if production.watchEvents.isEmpty {
+            production.watched = false
+            production.dateWatched = nil
+        } else {
+            production.dateWatched = production.watchEvents.last?.watchedAt
         }
 
         dataManager.saveQuietly()
-        HapticManager.shared.watchedToggle()
-        Logger.shared.info("Toggled watched status for: \(production.title)", category: .ui)
+        HapticManager.shared.buttonTap()
+        Logger.shared.info("Unmarked as watched: \(production.title) (remaining: \(production.watchCount))", category: .ui)
     }
 
     /// Toggle favorite status
@@ -132,12 +166,18 @@ final class MovieDetailViewModel {
 
     /// Formatted release year
     var formattedReleaseYear: String {
-        "\(production.releaseYear)"
+        if production.releaseYear == 0 {
+            return "TBC"
+        }
+        return "\(production.releaseYear)"
     }
 
     /// Formatted runtime
     var formattedRuntime: String {
-        FormatHelper.runtime(production.runtime ?? 0)
+        guard let runtime = production.runtime, runtime > 0 else {
+            return "Unknown"
+        }
+        return FormatHelper.runtime(runtime)
     }
 
     /// Formatted budget

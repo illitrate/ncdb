@@ -258,7 +258,7 @@ extension KeychainHelper {
 
     /// Get TMDb API key
     func getTMDbAPIKey() -> String? {
-        readOptional(forKey: .tmdbAPIKey)
+        try? read(forKey: .tmdbAPIKey)
     }
 
     /// Check if TMDb API key is configured

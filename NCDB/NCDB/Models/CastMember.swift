@@ -19,11 +19,13 @@ final class CastMember {
     init(
         name: String,
         character: String,
+        profilePath: String? = nil,
         order: Int = 0
     ) {
         self.id = UUID()
         self.name = name
         self.character = character
+        self.profilePath = profilePath
         self.order = order
     }
 }

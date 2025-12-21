@@ -13,6 +13,7 @@ struct MovieListView: View {
     @Query private var allProductions: [Production]
     @State private var viewModel = MovieListViewModel()
     @State private var showingFilters = false
+    @State private var showAbout = false
     @State private var viewMode: ViewMode = .grid
 
     enum ViewMode {
@@ -27,12 +28,18 @@ struct MovieListView: View {
         NavigationStack {
             contentView
                 .background(Color.primaryBackground)
-                .navigationTitle(navigationTitle)
+                .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
             }
             .searchable(text: $viewModel.searchQuery, prompt: "Search movies")
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    NCDBLogoView {
+                        showAbout = true
+                    }
+                }
+
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: Spacing.sm) {
                         // View mode toggle
@@ -56,6 +63,9 @@ struct MovieListView: View {
             .sheet(isPresented: $showingFilters) {
                 SearchFilterView(viewModel: viewModel)
             }
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
         }
     }
 

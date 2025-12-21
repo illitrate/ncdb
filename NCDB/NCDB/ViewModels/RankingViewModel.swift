@@ -132,16 +132,31 @@ final class RankingViewModel {
 
     /// Reorder movies with drag and drop
     func reorderMovie(_ movie: Production, to newIndex: Int) {
-        guard let oldIndex = rankedMovies.firstIndex(where: { $0.id == movie.id }) else { return }
+        guard let oldIndex = rankedMovies.firstIndex(where: { $0.id == movie.id }) else {
+            Logger.shared.warning("Cannot find movie in ranked list", category: .ui)
+            return
+        }
         guard oldIndex != newIndex else { return }
 
-        rankedMovies.remove(at: oldIndex)
-        rankedMovies.insert(movie, at: newIndex)
+        Logger.shared.info("📝 VM: Reordering from \(oldIndex) to \(newIndex)", category: .ui)
+        Logger.shared.info("📝 VM: Before: \(rankedMovies.map { $0.title })", category: .ui)
+
+        // Create new array to trigger observation
+        var newRanking = rankedMovies
+        newRanking.remove(at: oldIndex)
+        newRanking.insert(movie, at: newIndex)
+        rankedMovies = newRanking
+
+        Logger.shared.info("📝 VM: After: \(rankedMovies.map { $0.title })", category: .ui)
 
         updatePositions()
-        try? dataManager.save()
+
+        // Defer save to avoid blocking UI during drag
+        Task {
+            try? await dataManager.save()
+        }
+
         HapticManager.shared.medium()
-        Logger.shared.debug("Reordered \(movie.title) from position \(oldIndex + 1) to \(newIndex + 1)", category: .ui)
     }
 
     /// Update all ranking positions after reordering

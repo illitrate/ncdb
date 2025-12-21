@@ -6,16 +6,22 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// Data seeding/import screen
 struct DataSeedingView: View {
     let apiKey: String
     let onComplete: () -> Void
+    @Binding var isCurrentPage: Bool
+
+    @Environment(\.modelContext) private var modelContext
 
     @State private var isLoading = false
     @State private var progress: Double = 0
     @State private var statusMessage = "Preparing to load movies..."
     @State private var error: Error?
+    @State private var savedApiKey: String = ""
+    @State private var hasAttemptedLoad = false
 
     var body: some View {
         VStack(spacing: Spacing.xl) {
@@ -54,7 +60,7 @@ struct DataSeedingView: View {
 
             // Action buttons
             VStack(spacing: Spacing.md) {
-                if !apiKey.isEmpty && !isLoading {
+                if !savedApiKey.isEmpty && !isLoading {
                     GlassButton(title: "Load Movies from TMDb", style: .primary) {
                         Task {
                             await loadMovies()
@@ -81,14 +87,31 @@ struct DataSeedingView: View {
             .padding(.bottom, Spacing.xxl)
         }
         .padding(Spacing.lg)
-        .onAppear {
-            if !apiKey.isEmpty {
-                Task {
-                    await loadMovies()
-                }
-            } else {
-                statusMessage = "No API key provided. You can add movies later in Settings."
+        .onChange(of: isCurrentPage) { oldValue, newValue in
+            // Only load when this page becomes visible and we haven't loaded yet
+            if newValue && !hasAttemptedLoad {
+                hasAttemptedLoad = true
+                loadAPIKeyAndMovies()
             }
+        }
+    }
+
+    private func loadAPIKeyAndMovies() {
+        // Try to load API key from Keychain
+        if let keychainKey = try? KeychainHelper.shared.getTMDbAPIKey() {
+            savedApiKey = keychainKey
+            Logger.shared.info("Loaded TMDb API key from Keychain", category: .general)
+            Task {
+                await loadMovies()
+            }
+        } else if !apiKey.isEmpty {
+            // Fallback to passed apiKey (shouldn't happen but safe)
+            savedApiKey = apiKey
+            Task {
+                await loadMovies()
+            }
+        } else {
+            statusMessage = "No API key provided. You can add movies later in Settings."
         }
     }
 
@@ -102,7 +125,7 @@ struct DataSeedingView: View {
             progress = 0.2
 
             // Initialize TMDb service
-            let tmdbService = TMDbService(apiKey: apiKey)
+            let tmdbService = TMDbService(apiKey: savedApiKey)
 
             statusMessage = "Fetching Nicolas Cage filmography..."
             progress = 0.4
@@ -113,9 +136,36 @@ struct DataSeedingView: View {
             statusMessage = "Found \(movies.count) movies..."
             progress = 0.6
 
-            // Import into database would happen here
-            // For now, we'll just simulate it
-            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            // Import movies into database
+            statusMessage = "Saving movies to database..."
+            progress = 0.7
+
+            for (index, tmdbMovie) in movies.enumerated() {
+                // Convert TMDbMovie to Production model
+                let production = Production(
+                    title: tmdbMovie.title,
+                    releaseYear: tmdbMovie.releaseYear ?? 0,
+                    tmdbID: tmdbMovie.id
+                )
+
+                // Add additional metadata
+                production.posterPath = tmdbMovie.posterPath
+                production.plot = tmdbMovie.overview
+
+                modelContext.insert(production)
+
+                // Update progress every 10 movies
+                if index % 10 == 0 {
+                    let savedProgress = 0.7 + (Double(index) / Double(movies.count)) * 0.3
+                    progress = savedProgress
+                    statusMessage = "Saving movies... (\(index + 1)/\(movies.count))"
+                }
+            }
+
+            // Save all movies to database
+            try modelContext.save()
+
+            Logger.shared.info("Saved \(movies.count) movies to database", category: .database)
 
             progress = 1.0
             statusMessage = "Successfully loaded \(movies.count) movies!"

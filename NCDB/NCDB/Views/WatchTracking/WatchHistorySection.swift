@@ -64,64 +64,50 @@ struct WatchEventRow: View {
 
     var body: some View {
         HStack(spacing: Spacing.sm) {
-            // Date indicator
-            VStack(spacing: Spacing.xxxs) {
+            // Compact date and time
+            HStack(spacing: 4) {
+                Text(event.watchedAt.formatted(.dateTime.day()))
+                    .font(.caption.bold())
+                    .foregroundStyle(Color.cageGold)
+
                 Text(event.watchedAt.formatted(.dateTime.month(.abbreviated)))
                     .font(.caption2)
-                    .foregroundStyle(Color.tertiaryText)
-
-                Text(event.watchedAt.formatted(.dateTime.day()))
-                    .font(.headline)
-                    .foregroundStyle(Color.cageGold)
+                    .foregroundStyle(Color.secondaryText)
 
                 Text(event.watchedAt.formatted(.dateTime.year()))
                     .font(.caption2)
                     .foregroundStyle(Color.tertiaryText)
+
+                Text("/")
+                    .font(.caption2)
+                    .foregroundStyle(Color.tertiaryText)
+
+                Text(event.watchedAt.formatted(.dateTime.hour().minute()))
+                    .font(.caption2)
+                    .foregroundStyle(Color.tertiaryText)
             }
-            .frame(width: 50)
 
-            // Event details
-            VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                HStack {
-                    if let rating = event.rating {
-                        HStack(spacing: 2) {
-                            ForEach(0..<Int(rating), id: \.self) { _ in
-                                Image(systemName: "star.fill")
-                                    .font(.caption)
-                                    .foregroundStyle(Color.cageGold)
-                            }
-                        }
-                    }
-
-                    if let mood = event.mood {
-                        Text(mood)
-                            .font(.caption)
-                            .foregroundStyle(Color.secondaryText)
-                    }
-                }
-
-                if let location = event.location {
-                    Label(location, systemImage: "location.fill")
-                        .font(.caption)
-                        .foregroundStyle(Color.tertiaryText)
-                }
-
-                if !event.companions.isEmpty {
-                    Label(event.companions.joined(separator: ", "), systemImage: "person.2.fill")
-                        .font(.caption)
-                        .foregroundStyle(Color.tertiaryText)
-                        .lineLimit(1)
+            // Rating if available
+            if let rating = event.rating, rating > 0 {
+                HStack(spacing: 1) {
+                    Image(systemName: "star.fill")
+                        .font(.caption2)
+                        .foregroundStyle(Color.cageGold)
+                    Text(String(format: "%.1f", rating))
+                        .font(.caption2)
+                        .foregroundStyle(Color.cageGold)
                 }
             }
 
             Spacer()
 
             Image(systemName: "chevron.right")
-                .font(.caption)
+                .font(.caption2)
                 .foregroundStyle(Color.tertiaryText)
         }
-        .padding(Spacing.sm)
+        .padding(.vertical, Spacing.xxs)
+        .padding(.horizontal, Spacing.sm)
         .background(Color.glassLight)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 }

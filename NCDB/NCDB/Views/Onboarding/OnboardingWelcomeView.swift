@@ -15,16 +15,12 @@ struct OnboardingWelcomeView: View {
         VStack(spacing: Spacing.xl) {
             Spacer()
 
-            // Icon
-            Image(systemName: "film.stack.fill")
-                .font(.system(size: 80))
-                .foregroundStyle(
-                    LinearGradient(
-                        colors: [.cageGold, .cageGold.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+            // App Icon
+            Image("AppIcon")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 100, height: 100)
+                .clipShape(RoundedRectangle(cornerRadius: 22))
                 .shadow(color: .cageGold.opacity(0.5), radius: 20)
 
             // Title
@@ -60,32 +56,5 @@ struct OnboardingWelcomeView: View {
             .padding(.bottom, Spacing.xxl)
         }
         .padding(Spacing.lg)
-    }
-}
-
-struct FeatureRow: View {
-    let icon: String
-    let title: String
-    let description: String
-
-    var body: some View {
-        HStack(spacing: Spacing.md) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(.cageGold)
-                .frame(width: 40)
-
-            VStack(alignment: .leading, spacing: Spacing.xxxs) {
-                Text(title)
-                    .font(.headline)
-                    .foregroundStyle(Color.primaryText)
-
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundStyle(Color.secondaryText)
-            }
-
-            Spacer()
-        }
     }
 }
