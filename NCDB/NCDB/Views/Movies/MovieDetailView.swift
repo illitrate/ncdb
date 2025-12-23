@@ -13,6 +13,8 @@ struct MovieDetailView: View {
     @State private var viewModel: MovieDetailViewModel
     @State private var showAbout = false
     @State private var showFullScreenPoster = false
+    @State private var isEditingReview = false
+    @State private var isEditingQuotes = false
 
     init(production: Production) {
         self.production = production
@@ -56,9 +58,89 @@ struct MovieDetailView: View {
                         }
 
                         VStack(alignment: .leading, spacing: Spacing.xs) {
-                            Text(production.title)
-                                .font(.title2.bold())
-                                .foregroundStyle(Color.primaryText)
+                            // Title row with menu
+                            HStack {
+                                Text(production.title)
+                                    .font(.title2.bold())
+                                    .foregroundStyle(Color.primaryText)
+
+                                Spacer()
+
+                                // Menu button
+                                Menu {
+                                    // Watch/Unwatch
+                                    Button {
+                                        if production.watched {
+                                            viewModel.markAsWatched()
+                                        } else {
+                                            viewModel.markAsWatched()
+                                        }
+                                    } label: {
+                                        Label(
+                                            production.watched ? "Watched Again" : "Mark as Watched",
+                                            systemImage: "checkmark.circle"
+                                        )
+                                    }
+
+                                    if production.watched {
+                                        Button(role: .destructive) {
+                                            viewModel.unmarkAsWatched()
+                                        } label: {
+                                            Label("Remove From Watched", systemImage: "xmark.circle")
+                                        }
+                                    }
+
+                                    Divider()
+
+                                    // Favorite
+                                    Button {
+                                        viewModel.toggleFavorite()
+                                    } label: {
+                                        Label(
+                                            production.isFavorite ? "Unfavorite" : "Favorite",
+                                            systemImage: production.isFavorite ? "heart.fill" : "heart"
+                                        )
+                                    }
+
+                                    Divider()
+
+                                    // Review
+                                    Button {
+                                        viewModel.editedReview = viewModel.production.review ?? ""
+                                        isEditingReview = true
+                                    } label: {
+                                        Label(
+                                            viewModel.hasReview ? "Edit My Review" : "Add My Review",
+                                            systemImage: "text.quote"
+                                        )
+                                    }
+
+                                    // Quotes
+                                    Button {
+                                        viewModel.editedQuotes = viewModel.production.quotes ?? ""
+                                        isEditingQuotes = true
+                                    } label: {
+                                        Label(
+                                            viewModel.hasQuotes ? "Edit Quotes" : "Add Favourite Quotes",
+                                            systemImage: "quote.bubble"
+                                        )
+                                    }
+
+                                    if viewModel.hasReview {
+                                        Divider()
+
+                                        Button {
+                                            shareReview()
+                                        } label: {
+                                            Label("Share Review", systemImage: "square.and.arrow.up")
+                                        }
+                                    }
+                                } label: {
+                                    Image(systemName: "ellipsis.circle")
+                                        .font(.title2)
+                                        .foregroundStyle(Color.cageGold)
+                                }
+                            }
 
                             Text(viewModel.formattedReleaseYear)
                                 .font(.subheadline)
@@ -77,35 +159,6 @@ struct MovieDetailView: View {
                         Spacer()
                     }
 
-                    // Quick actions
-                    HStack(spacing: Spacing.md) {
-                        Button {
-                            viewModel.markAsWatched()
-                        } label: {
-                            Label(production.watched ? "Watched Again" : "Mark as Watched", systemImage: "checkmark.circle")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(.cageGold)
-
-                        if production.watched {
-                            Button {
-                                viewModel.unmarkAsWatched()
-                            } label: {
-                                Label("Unmark", systemImage: "xmark.circle")
-                                    .font(.caption)
-                            }
-                            .buttonStyle(.bordered)
-                        }
-
-                        Spacer()
-
-                        GlassButton(title: "", icon: production.isFavorite ? "heart.fill" : "heart", style: .secondary) {
-                            viewModel.toggleFavorite()
-                        }
-                        .frame(width: 50)
-                    }
-
                     // Rating
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("Your Rating")
@@ -120,6 +173,115 @@ struct MovieDetailView: View {
                                 viewModel.saveRating()
                             }
                         )
+                    }
+
+                    // Review Section (only show if review exists or editing)
+                    if viewModel.hasReview || isEditingReview {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("My Review")
+                                .font(.headline)
+                                .foregroundStyle(Color.primaryText)
+
+                            if isEditingReview {
+                                // Edit Mode
+                                VStack(alignment: .trailing, spacing: Spacing.xs) {
+                                    TextEditor(text: $viewModel.editedReview)
+                                        .frame(minHeight: 120)
+                                        .padding(Spacing.sm)
+                                        .background(Color.glassLight)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .onChange(of: viewModel.editedReview) { oldValue, newValue in
+                                            // Enforce 2000 character limit
+                                            if newValue.count > 2000 {
+                                                viewModel.editedReview = String(newValue.prefix(2000))
+                                            }
+                                        }
+
+                                    // Character counter
+                                    Text("\(viewModel.editedReview.count)/2000")
+                                        .font(.caption)
+                                        .foregroundStyle(viewModel.editedReview.count > 1900 ? Color.orange : Color.secondaryText)
+                                }
+
+                                HStack {
+                                    GlassButton(title: "Cancel", style: .secondary) {
+                                        viewModel.cancelReviewEdit()
+                                        isEditingReview = false
+                                    }
+                                    GlassButton(title: "Save", style: .primary) {
+                                        viewModel.saveReview()
+                                        isEditingReview = false
+                                        HapticManager.shared.success()
+                                    }
+                                }
+                            } else {
+                                // Display Mode
+                                Text(viewModel.production.review ?? "")
+                                    .font(.body)
+                                    .foregroundStyle(Color.primaryText)
+                                    .padding(Spacing.sm)
+                                    .background(Color.glassLight)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                    }
+
+                    // Favourite Quotes Section (only show if quotes exist or editing)
+                    if viewModel.hasQuotes || isEditingQuotes {
+                        VStack(alignment: .leading, spacing: Spacing.sm) {
+                            Text("Favourite Quotes")
+                                .font(.headline)
+                                .foregroundStyle(Color.primaryText)
+
+                            if isEditingQuotes {
+                                // Edit Mode
+                                VStack(alignment: .trailing, spacing: Spacing.xs) {
+                                    TextEditor(text: $viewModel.editedQuotes)
+                                        .frame(minHeight: 120)
+                                        .padding(Spacing.sm)
+                                        .background(Color.glassLight)
+                                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                                        .onChange(of: viewModel.editedQuotes) { oldValue, newValue in
+                                            // Enforce 2000 character limit
+                                            if newValue.count > 2000 {
+                                                viewModel.editedQuotes = String(newValue.prefix(2000))
+                                            }
+                                        }
+
+                                    // Character counter with hint
+                                    Text("\(viewModel.editedQuotes.count)/2000 • One quote per line")
+                                        .font(.caption)
+                                        .foregroundStyle(viewModel.editedQuotes.count > 1900 ? Color.orange : Color.secondaryText)
+                                }
+
+                                HStack {
+                                    GlassButton(title: "Cancel", style: .secondary) {
+                                        viewModel.cancelQuotesEdit()
+                                        isEditingQuotes = false
+                                    }
+                                    GlassButton(title: "Save", style: .primary) {
+                                        viewModel.saveQuotes()
+                                        isEditingQuotes = false
+                                        HapticManager.shared.success()
+                                    }
+                                }
+                            } else {
+                                // Display Mode - Show quotes as formatted list
+                                VStack(alignment: .leading, spacing: Spacing.xs) {
+                                    ForEach(Array(viewModel.quotesArray.enumerated()), id: \.offset) { index, quote in
+                                        HStack(alignment: .top, spacing: Spacing.xs) {
+                                            Text("\"\(quote)\"")
+                                                .font(.body.italic())
+                                                .foregroundStyle(Color.primaryText)
+                                        }
+                                        .padding(Spacing.sm)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .background(Color.glassLight)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     // Plot
@@ -187,6 +349,38 @@ struct MovieDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Share Review Function
+
+    private func shareReview() {
+        guard let review = production.review, !review.isEmpty else { return }
+
+        let tmdbURL = URL(string: "https://www.themoviedb.org/movie/\(production.tmdbID)")!
+
+        var reviewText = "My Review of \(production.title) (\(production.releaseYear))\n"
+
+        if let rating = production.userRating, rating > 0 {
+            reviewText += "\(String(format: "%.1f", rating))★\n\n"
+        } else {
+            reviewText += "\n"
+        }
+
+        reviewText += review
+        reviewText += "\n\nWatch on TMDb: \(tmdbURL.absoluteString)"
+        reviewText += "\n\n#NicolasCage #NCDB"
+
+        let activityVC = UIActivityViewController(
+            activityItems: [reviewText, tmdbURL],
+            applicationActivities: nil
+        )
+
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let rootViewController = windowScene.windows.first?.rootViewController {
+            rootViewController.present(activityVC, animated: true)
+        }
+
+        HapticManager.shared.light()
     }
 }
 

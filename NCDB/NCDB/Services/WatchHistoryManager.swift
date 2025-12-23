@@ -66,6 +66,9 @@ final class WatchHistoryManager {
         try? dataManager.save()
         HapticManager.shared.success()
         Logger.shared.info("Created watch event for: \(production.title)", category: .general)
+
+        // Notify achievement tracker
+        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
     }
 
     /// Get all watch events for a production
@@ -115,6 +118,9 @@ final class WatchHistoryManager {
         try? dataManager.save()
         HapticManager.shared.success()
         Logger.shared.info("Deleted watch event", category: .general)
+
+        // Notify achievement tracker
+        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
     }
 
     // MARK: - Statistics

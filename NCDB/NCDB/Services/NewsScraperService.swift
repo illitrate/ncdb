@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import FeedKit
 import SwiftData
 
 /// Service for scraping and parsing Nicolas Cage news from various sources
@@ -19,35 +18,56 @@ final class NewsScraperService {
     // MARK: - News Sources
 
     private let newsSources: [NewsSourceConfig] = [
+        // Priority sources (checked first, displayed first)
         NewsSourceConfig(
             name: "The Hollywood Reporter",
             url: "https://www.hollywoodreporter.com/feed/",
             type: .rss,
-            keywords: ["nicolas cage", "nic cage", "cage"]
+            keywords: ["nicolas cage", "nic cage", "cage"],
+            priority: 1
         ),
         NewsSourceConfig(
             name: "Variety",
             url: "https://variety.com/feed/",
             type: .rss,
-            keywords: ["nicolas cage", "nic cage"]
+            keywords: ["nicolas cage", "nic cage"],
+            priority: 2
         ),
         NewsSourceConfig(
             name: "Deadline",
             url: "https://deadline.com/feed/",
             type: .rss,
-            keywords: ["nicolas cage", "nic cage"]
+            keywords: ["nicolas cage", "nic cage"],
+            priority: 3
         ),
         NewsSourceConfig(
             name: "IndieWire",
             url: "https://www.indiewire.com/feed/",
             type: .rss,
-            keywords: ["nicolas cage", "nic cage"]
+            keywords: ["nicolas cage", "nic cage"],
+            priority: 4
         ),
         NewsSourceConfig(
-            name: "Collider",
-            url: "https://collider.com/feed/",
+            name: "/Film",
+            url: "https://www.slashfilm.com/feed/",
             type: .rss,
-            keywords: ["nicolas cage", "nic cage", "cage"]
+            keywords: ["nicolas cage", "nic cage"],
+            priority: 5
+        ),
+        NewsSourceConfig(
+            name: "The Wrap",
+            url: "https://www.thewrap.com/feed/",
+            type: .rss,
+            keywords: ["nicolas cage", "nic cage"],
+            priority: 6
+        ),
+        // Fallback source (always last - guaranteed to have articles)
+        NewsSourceConfig(
+            name: "Google News",
+            url: "https://news.google.com/rss/search?q=Nicolas+Cage&hl=en-US&gl=US&ceid=US:en",
+            type: .rss,
+            keywords: [], // No filtering needed - search already returns Nicolas Cage articles
+            priority: 999 // Always last
         )
     ]
 
@@ -74,103 +94,54 @@ final class NewsScraperService {
         // Filter for relevance
         let relevantArticles = NewsFilterService.shared.filterRelevantArticles(allArticles)
 
-        Logger.shared.info("Fetched \(relevantArticles.count) relevant articles", category: .general)
+        // Sort by source priority (lower priority number = shown first)
+        let sortedArticles = relevantArticles.sorted { article1, article2 in
+            let priority1 = sourcePriority(for: article1.source)
+            let priority2 = sourcePriority(for: article2.source)
+
+            if priority1 != priority2 {
+                return priority1 < priority2
+            } else {
+                // Within same source, sort by date (newest first)
+                return article1.publishedDate > article2.publishedDate
+            }
+        }
+
+        Logger.shared.info("Fetched \(sortedArticles.count) relevant articles", category: .general)
 
         // Save to database
-        for article in relevantArticles {
+        for article in sortedArticles {
             modelContext.insert(article)
         }
 
         try? modelContext.save()
 
-        return relevantArticles
+        return sortedArticles
+    }
+
+    /// Get priority for a source by name
+    private func sourcePriority(for sourceName: String) -> Int {
+        newsSources.first { $0.name == sourceName }?.priority ?? 999
     }
 
     /// Fetch news from a specific source
     private func fetchNews(from source: NewsSourceConfig) async -> [NewsArticle] {
         Logger.shared.info("Fetching from \(source.name)...", category: .general)
 
-        // TODO: Implement FeedKit integration
-        // For now, return empty array until FeedKit API is properly configured
-        Logger.shared.warning("News scraping temporarily disabled - FeedKit integration pending", category: .general)
-        return []
-    }
-
-    // MARK: - Feed Parsing
-
-    private func parseFeed(_ feed: Feed, source: NewsSourceConfig) -> [NewsArticle] {
-        var articles: [NewsArticle] = []
-
-        switch feed {
-        case .rss(let rssFeed):
-            articles = parseRSSFeed(rssFeed, source: source)
-
-        case .atom(let atomFeed):
-            articles = parseAtomFeed(atomFeed, source: source)
-
-        case .json(let jsonFeed):
-            articles = parseJSONFeed(jsonFeed, source: source)
+        guard let feedURL = URL(string: source.url) else {
+            Logger.shared.error("Invalid feed URL: \(source.url)", category: .general)
+            return []
         }
 
-        return articles
-    }
-
-    private func parseRSSFeed(_ feed: RSSFeed, source: NewsSourceConfig) -> [NewsArticle] {
-        guard let channelItems = feed.channel?.items else { return [] }
-
-        return channelItems.compactMap { item -> NewsArticle? in
-            guard let title = item.title,
-                  let link = item.link,
-                  let pubDate = item.pubDate else {
-                return nil
-            }
-
-            // Check if article mentions Nicolas Cage
-            let content = "\(title) \(item.description ?? "")"
-            guard containsRelevantKeywords(content, keywords: source.keywords) else {
-                return nil
-            }
-
-            let article = NewsArticle(
-                url: link,
-                title: title,
-                summary: item.description?.trimmingCharacters(in: .whitespacesAndNewlines),
-                source: source.name,
-                publishedDate: pubDate
-            )
-
-            return article
-        }
-    }
-
-    private func parseAtomFeed(_ feed: AtomFeed, source: NewsSourceConfig) -> [NewsArticle] {
-        // Atom feed parsing simplified for now
-        return []
-    }
-
-    private func parseJSONFeed(_ feed: JSONFeed, source: NewsSourceConfig) -> [NewsArticle] {
-        guard let items = feed.items else { return [] }
-
-        return items.compactMap { item -> NewsArticle? in
-            guard let title = item.title,
-                  let url = item.url,
-                  let datePublished = item.datePublished else {
-                return nil
-            }
-
-            // Check if article mentions Nicolas Cage
-            let content = "\(title) \(item.summary ?? "")"
-            guard containsRelevantKeywords(content, keywords: source.keywords) else {
-                return nil
-            }
-
-            return NewsArticle(
-                url: url,
-                title: title,
-                summary: item.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
-                source: source.name,
-                publishedDate: datePublished
-            )
+        do {
+            let (data, _) = try await URLSession.shared.data(from: feedURL)
+            let parser = SimpleRSSParser(data: data, source: source)
+            let articles = parser.parse()
+            Logger.shared.info("Parsed \(articles.count) articles from \(source.name)", category: .general)
+            return articles
+        } catch {
+            Logger.shared.error("Failed to fetch feed from \(source.name): \(error)", category: .general)
+            return []
         }
     }
 
@@ -183,6 +154,50 @@ final class NewsScraperService {
         }
     }
 
+    // MARK: - HTML Stripping
+
+    private func stripHTML(_ html: String) -> String {
+        guard !html.isEmpty else { return "" }
+
+        // Remove HTML tags
+        var result = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+
+        // Decode common HTML entities
+        result = result.replacingOccurrences(of: "&nbsp;", with: " ")
+        result = result.replacingOccurrences(of: "&amp;", with: "&")
+        result = result.replacingOccurrences(of: "&lt;", with: "<")
+        result = result.replacingOccurrences(of: "&gt;", with: ">")
+        result = result.replacingOccurrences(of: "&quot;", with: "\"")
+        result = result.replacingOccurrences(of: "&#39;", with: "'")
+        result = result.replacingOccurrences(of: "&apos;", with: "'")
+        result = result.replacingOccurrences(of: "&rsquo;", with: "'")
+        result = result.replacingOccurrences(of: "&lsquo;", with: "'")
+        result = result.replacingOccurrences(of: "&rdquo;", with: "\"")
+        result = result.replacingOccurrences(of: "&ldquo;", with: "\"")
+        result = result.replacingOccurrences(of: "&mdash;", with: "—")
+        result = result.replacingOccurrences(of: "&ndash;", with: "–")
+        result = result.replacingOccurrences(of: "&hellip;", with: "…")
+
+        // Decode numeric HTML entities (e.g., &#8217;)
+        result = result.replacingOccurrences(
+            of: "&#(\\d+);",
+            with: "",
+            options: .regularExpression
+        )
+
+        // Clean up extra whitespace
+        result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If after stripping we're left with just "Read Full Article" or similar noise, return empty
+        let lowercased = result.lowercased()
+        if lowercased == "read full article" || lowercased.isEmpty {
+            return ""
+        }
+
+        return result
+    }
+
     // MARK: - Supporting Types
 
     struct NewsSourceConfig {
@@ -190,11 +205,169 @@ final class NewsScraperService {
         let url: String
         let type: SourceType
         let keywords: [String]
+        let priority: Int // Lower number = higher priority (displayed first)
 
         enum SourceType {
             case rss
             case atom
             case json
         }
+    }
+}
+
+// MARK: - Simple RSS Parser
+
+/// Simple RSS feed parser using XMLParser
+private class SimpleRSSParser: NSObject, XMLParserDelegate {
+    private let data: Data
+    private let source: NewsScraperService.NewsSourceConfig
+    private var articles: [NewsArticle] = []
+
+    // Current element tracking
+    private var currentElement = ""
+    private var currentTitle = ""
+    private var currentLink = ""
+    private var currentDescription = ""
+    private var currentPubDate = ""
+
+    init(data: Data, source: NewsScraperService.NewsSourceConfig) {
+        self.data = data
+        self.source = source
+    }
+
+    func parse() -> [NewsArticle] {
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        parser.parse()
+
+        Logger.shared.debug("RSS Parser for \(source.name): Found \(totalItems) items, \(articles.count) matched keywords", category: .general)
+
+        return articles
+    }
+
+    private var totalItems = 0
+
+    // MARK: - XMLParserDelegate
+
+    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
+        currentElement = elementName
+
+        if elementName == "item" {
+            currentTitle = ""
+            currentLink = ""
+            currentDescription = ""
+            currentPubDate = ""
+        }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        switch currentElement {
+        case "title":
+            currentTitle += trimmed
+        case "link":
+            currentLink += trimmed
+        case "description":
+            currentDescription += trimmed
+        case "pubDate":
+            currentPubDate += trimmed
+        default:
+            break
+        }
+    }
+
+    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
+        if elementName == "item" {
+            totalItems += 1
+
+            // Log first 3 items for debugging
+            if totalItems <= 3 {
+                Logger.shared.debug("[\(source.name)] Item \(totalItems): \(currentTitle)", category: .general)
+            }
+
+            // Check if article is relevant
+            let isRelevant: Bool
+            if source.keywords.isEmpty {
+                // No filtering needed (e.g., Google News search already filtered)
+                isRelevant = true
+            } else {
+                let content = "\(currentTitle) \(currentDescription)"
+                let lowercased = content.lowercased()
+                isRelevant = source.keywords.contains { keyword in
+                    lowercased.contains(keyword.lowercased())
+                }
+            }
+
+            guard isRelevant, !currentTitle.isEmpty, !currentLink.isEmpty else {
+                return
+            }
+
+            Logger.shared.debug("[\(source.name)] MATCH: \(currentTitle)", category: .general)
+
+            // Parse date
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
+            let pubDate = dateFormatter.date(from: currentPubDate) ?? Date()
+
+            // Clean up description (strip HTML tags, especially for Google News)
+            let cleanDescription = stripHTML(currentDescription)
+
+            let article = NewsArticle(
+                url: currentLink,
+                title: currentTitle,
+                summary: cleanDescription.isEmpty ? nil : cleanDescription,
+                source: source.name,
+                publishedDate: pubDate
+            )
+
+            articles.append(article)
+        }
+    }
+
+    // MARK: - HTML Stripping
+
+    private func stripHTML(_ html: String) -> String {
+        guard !html.isEmpty else { return "" }
+
+        // Remove HTML tags
+        var result = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
+
+        // Decode common HTML entities
+        result = result.replacingOccurrences(of: "&nbsp;", with: " ")
+        result = result.replacingOccurrences(of: "&amp;", with: "&")
+        result = result.replacingOccurrences(of: "&lt;", with: "<")
+        result = result.replacingOccurrences(of: "&gt;", with: ">")
+        result = result.replacingOccurrences(of: "&quot;", with: "\"")
+        result = result.replacingOccurrences(of: "&#39;", with: "'")
+        result = result.replacingOccurrences(of: "&apos;", with: "'")
+        result = result.replacingOccurrences(of: "&rsquo;", with: "'")
+        result = result.replacingOccurrences(of: "&lsquo;", with: "'")
+        result = result.replacingOccurrences(of: "&rdquo;", with: "\"")
+        result = result.replacingOccurrences(of: "&ldquo;", with: "\"")
+        result = result.replacingOccurrences(of: "&mdash;", with: "—")
+        result = result.replacingOccurrences(of: "&ndash;", with: "–")
+        result = result.replacingOccurrences(of: "&hellip;", with: "…")
+
+        // Decode numeric HTML entities (e.g., &#8217;)
+        result = result.replacingOccurrences(
+            of: "&#(\\d+);",
+            with: "",
+            options: .regularExpression
+        )
+
+        // Clean up extra whitespace
+        result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // If after stripping we're left with just "Read Full Article" or similar noise, return empty
+        let lowercased = result.lowercased()
+        if lowercased == "read full article" || lowercased.isEmpty {
+            return ""
+        }
+
+        return result
     }
 }

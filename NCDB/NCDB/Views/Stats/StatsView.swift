@@ -34,26 +34,24 @@ struct StatsView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Spacing.lg) {
-                    statsGrid
-                    chartsSection
-                }
-                .padding(Spacing.md)
+        ScrollView {
+            VStack(spacing: Spacing.lg) {
+                statsGrid
+                chartsSection
             }
-            .background(Color.primaryBackground)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    NCDBLogoView {
-                        showAbout = true
-                    }
+            .padding(Spacing.md)
+        }
+        .background(Color.primaryBackground)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                NCDBLogoView {
+                    showAbout = true
                 }
             }
-            .task {
-                await viewModel.loadStatistics(productions: productions)
-            }
+        }
+        .task {
+            await viewModel.loadStatistics(productions: productions)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()

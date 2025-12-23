@@ -25,48 +25,46 @@ struct WatchlistView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if watchlist.isEmpty {
-                    EmptyStateView(
-                        icon: "bookmark",
-                        title: "Your Watchlist is Empty",
-                        message: "All Nicolas Cage movies have been watched!\n\nOr add movies from TMDb to build your watchlist."
-                    )
-                } else {
-                    ScrollView {
-                        if viewMode == .grid {
-                            gridView
-                        } else {
-                            listView
-                        }
+        Group {
+            if watchlist.isEmpty {
+                EmptyStateView(
+                    icon: "bookmark",
+                    title: "Your Watchlist is Empty",
+                    message: "All Nicolas Cage movies have been watched!\n\nOr add movies from TMDb to build your watchlist."
+                )
+            } else {
+                ScrollView {
+                    if viewMode == .grid {
+                        gridView
+                    } else {
+                        listView
                     }
                 }
             }
-            .background(Color.primaryBackground)
-            .navigationTitle("Watchlist (\(watchlist.count))")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            viewMode = .grid
-                        } label: {
-                            Label("Grid", systemImage: "square.grid.2x2")
-                        }
-
-                        Button {
-                            viewMode = .list
-                        } label: {
-                            Label("List", systemImage: "list.bullet")
-                        }
+        }
+        .background(Color.primaryBackground)
+        .navigationTitle("Watchlist (\(watchlist.count))")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        viewMode = .grid
                     } label: {
-                        Image(systemName: "square.grid.2x2")
+                        Label("Grid", systemImage: "square.grid.2x2")
                     }
+
+                    Button {
+                        viewMode = .list
+                    } label: {
+                        Label("List", systemImage: "list.bullet")
+                    }
+                } label: {
+                    Image(systemName: "square.grid.2x2")
                 }
             }
-            .navigationDestination(for: Production.self) { production in
-                MovieDetailView(production: production)
-            }
+        }
+        .navigationDestination(for: Production.self) { production in
+            MovieDetailView(production: production)
         }
     }
 

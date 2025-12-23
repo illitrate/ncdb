@@ -62,12 +62,23 @@ struct NewsArticleDetailView: View {
                         .fontWeight(.bold)
                         .foregroundStyle(Color.primaryText)
 
-                    // Summary
-                    if let summary = article.summary, !summary.isEmpty {
+                    // Summary (hide for Google News as it's just HTML links)
+                    if let summary = article.summary, !summary.isEmpty, article.source != "Google News" {
                         Text(summary)
                             .font(.body)
                             .foregroundStyle(Color.primaryText)
                             .lineSpacing(4)
+                    }
+
+                    // Info message for Google News articles
+                    if article.source == "Google News" {
+                        Text("Google News provides links to articles from various sources. Tap 'Read Full Article' below to view the complete story.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondaryText)
+                            .padding(.vertical, Spacing.sm)
+                            .padding(.horizontal, Spacing.md)
+                            .background(Color(hex: "1A1A1A"))
+                            .clipShape(RoundedRectangle(cornerRadius: Sizes.cornerRadiusSmall))
                     }
 
                     // Read full article button

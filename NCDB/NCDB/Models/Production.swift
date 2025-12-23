@@ -6,7 +6,7 @@ import SwiftData
 
 // MARK: - Production (Movie/TV Show)
 @Model
-final class Production {
+final class Production: Hashable {
     @Attribute(.unique) var id: UUID
     var title: String
     var releaseYear: Int
@@ -32,6 +32,7 @@ final class Production {
     var dateWatched: Date?
     var userRating: Double?
     var review: String?
+    var quotes: String? // Stores favourite quotes (one per line)
     var isFavorite: Bool = false
     var rankingPosition: Int?
     var watchCount: Int = 0
@@ -68,6 +69,17 @@ enum ProductionType: String, Codable {
     case tvShow = "TV Show"
     case tvMovie = "TV Movie"
     case documentary = "Documentary"
+}
+
+// MARK: - Hashable Conformance
+extension Production {
+    static func == (lhs: Production, rhs: Production) -> Bool {
+        lhs.id == rhs.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(id)
+    }
 }
 
 // MARK: - Production Helpers

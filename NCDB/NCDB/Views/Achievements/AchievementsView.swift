@@ -16,51 +16,60 @@ struct AchievementsView: View {
 
     @State private var selectedCategory: AchievementGroup?
     @State private var selectedAchievement: AchievementDefinition?
+    @State private var showAbout = false
 
     private let columns = [
         GridItem(.adaptive(minimum: 100, maximum: 120), spacing: Spacing.md)
     ]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Spacing.lg) {
-                    // Progress card
-                    progressCard
+        ScrollView {
+            VStack(spacing: Spacing.lg) {
+                // Progress card
+                progressCard
 
-                    // Category filter
-                    categoryPicker
+                // Category filter
+                categoryPicker
 
-                    // Achievements grid
-                    LazyVGrid(columns: columns, spacing: Spacing.md) {
-                        ForEach(filteredAchievements) { definition in
-                            Button {
-                                selectedAchievement = definition
-                                HapticManager.shared.light()
-                            } label: {
-                                AchievementBadge(
-                                    definition: definition,
-                                    isUnlocked: isUnlocked(definition),
-                                    progress: getProgress(for: definition)
-                                )
-                            }
-                            .buttonStyle(.plain)
+                // Achievements grid
+                LazyVGrid(columns: columns, spacing: Spacing.md) {
+                    ForEach(filteredAchievements) { definition in
+                        Button {
+                            selectedAchievement = definition
+                            HapticManager.shared.light()
+                        } label: {
+                            AchievementBadge(
+                                definition: definition,
+                                isUnlocked: isUnlocked(definition),
+                                progress: getProgress(for: definition)
+                            )
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, Spacing.md)
                 }
-                .padding(.vertical, Spacing.md)
+                .padding(.horizontal, Spacing.md)
             }
-            .background(Color.primaryBackground)
-            .navigationTitle("Achievements")
-            .sheet(item: $selectedAchievement) { definition in
-                AchievementDetailView(
-                    definition: definition,
-                    isUnlocked: isUnlocked(definition),
-                    unlockedAt: getUnlockedDate(definition),
-                    progress: getProgress(for: definition)
-                )
+            .padding(.vertical, Spacing.md)
+        }
+        .background(Color.primaryBackground)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                NCDBLogoView {
+                    showAbout = true
+                }
             }
+        }
+        .sheet(item: $selectedAchievement) { definition in
+            AchievementDetailView(
+                definition: definition,
+                isUnlocked: isUnlocked(definition),
+                unlockedAt: getUnlockedDate(definition),
+                progress: getProgress(for: definition)
+            )
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
         }
     }
 

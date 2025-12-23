@@ -71,6 +71,7 @@ struct NCDBApp: App {
             .onAppear {
                 configureAppearance()
                 configureDataManager()
+                configureAchievementTracking()
             }
         }
         .modelContainer(sharedModelContainer)
@@ -81,6 +82,19 @@ struct NCDBApp: App {
     private func configureDataManager() {
         DataManager.shared.configure(with: sharedModelContainer)
         Logger.shared.info("DataManager configured with ModelContainer", category: .general)
+    }
+
+    // MARK: - Achievement Tracking Configuration
+
+    private func configureAchievementTracking() {
+        Task { @MainActor in
+            AchievementProgressTracker.shared.startTracking()
+
+            // Force check on first launch to unlock any already-earned achievements
+            await AchievementProgressTracker.shared.forceCheck()
+
+            Logger.shared.info("Achievement tracking configured", category: .general)
+        }
     }
 
     // MARK: - Appearance Configuration
@@ -112,6 +126,8 @@ struct NCDBApp: App {
 
 struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
+    @State private var achievementToast: AchievementDefinition?
+    @State private var showToast = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -133,17 +149,56 @@ struct MainTabView: View {
                 }
                 .tag(AppTab.rankings)
 
-            StatsView()
+            AchievementsView()
                 .tabItem {
-                    Label("Stats", systemImage: SFSymbols.stats)
+                    Label("Achievements", systemImage: SFSymbols.achievement)
                 }
-                .tag(AppTab.stats)
+                .tag(AppTab.achievements)
 
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: SFSymbols.settings)
                 }
                 .tag(AppTab.settings)
+        }
+        .overlay(alignment: .top) {
+            if showToast, let achievement = achievementToast {
+                AchievementToast(
+                    definition: achievement,
+                    isPresented: $showToast
+                )
+                .padding(.top, 60)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .onAppear {
+            setupAchievementNotifications()
+        }
+    }
+
+    // MARK: - Achievement Notifications
+
+    private func setupAchievementNotifications() {
+        NotificationCenter.default.addObserver(
+            forName: .achievementUnlocked,
+            object: nil,
+            queue: .main
+        ) { notification in
+            if let achievementID = notification.object as? String,
+               let definition = AchievementManager.shared.allAchievements.first(where: { $0.id == achievementID }) {
+                achievementToast = definition
+                withAnimation(.spring()) {
+                    showToast = true
+                }
+
+                // Auto-dismiss after 3 seconds
+                Task {
+                    try? await Task.sleep(for: .seconds(3))
+                    withAnimation(.spring()) {
+                        showToast = false
+                    }
+                }
+            }
         }
     }
 }
@@ -154,7 +209,7 @@ enum AppTab: Int, Hashable {
     case home
     case movies
     case rankings
-    case stats
+    case achievements
     case settings
 }
 

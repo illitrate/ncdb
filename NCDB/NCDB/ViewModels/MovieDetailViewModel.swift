@@ -33,6 +33,7 @@ final class MovieDetailViewModel {
     /// Temporary edit values
     var editedRating: Double
     var editedReview: String
+    var editedQuotes: String
 
     /// Data manager
     private let dataManager = DataManager.shared
@@ -43,6 +44,7 @@ final class MovieDetailViewModel {
         self.production = production
         self.editedRating = production.userRating ?? 0
         self.editedReview = production.review ?? ""
+        self.editedQuotes = production.quotes ?? ""
     }
 
     // MARK: - Actions
@@ -70,6 +72,9 @@ final class MovieDetailViewModel {
         dataManager.saveQuietly()
         HapticManager.shared.success()
         Logger.shared.info("Marked as watched: \(production.title) (total: \(production.watchCount))", category: .ui)
+
+        // Notify achievement tracker
+        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
     }
 
     /// Unmark as watched (removes the most recent watch event)
@@ -86,6 +91,10 @@ final class MovieDetailViewModel {
         if production.watchEvents.isEmpty {
             production.watched = false
             production.dateWatched = nil
+
+            // Clear rating and remove from rankings when fully unwatched
+            production.userRating = 0
+            editedRating = 0
         } else {
             production.dateWatched = production.watchEvents.last?.watchedAt
         }
@@ -93,6 +102,17 @@ final class MovieDetailViewModel {
         dataManager.saveQuietly()
         HapticManager.shared.buttonTap()
         Logger.shared.info("Unmarked as watched: \(production.title) (remaining: \(production.watchCount))", category: .ui)
+
+        // Notify achievement tracker
+        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
+
+        // Remove from rankings if fully unwatched
+        if production.watchCount == 0 {
+            NotificationCenter.default.post(
+                name: Notification.Name("autoAdjustRanking"),
+                object: production
+            )
+        }
     }
 
     /// Toggle favorite status
@@ -111,10 +131,26 @@ final class MovieDetailViewModel {
     /// Save rating
     func saveRating() {
         production.userRating = editedRating
+
+        // If rating >= 0.5 and not already watched, automatically mark as watched
+        if editedRating >= 0.5 && !production.watched {
+            markAsWatched()
+            Logger.shared.info("Auto-marked as watched when rating applied: \(production.title)", category: .ui)
+        }
+
         dataManager.saveQuietly()
         isEditingRating = false
         HapticManager.shared.success()
         Logger.shared.info("Updated rating for: \(production.title) to \(editedRating)", category: .ui)
+
+        // Notify achievement tracker
+        NotificationCenter.default.post(name: .productionRatingChanged, object: nil)
+
+        // Auto-adjust ranking based on new rating
+        NotificationCenter.default.post(
+            name: Notification.Name("autoAdjustRanking"),
+            object: production
+        )
     }
 
     /// Cancel rating edit
@@ -141,6 +177,19 @@ final class MovieDetailViewModel {
     func cancelReviewEdit() {
         editedReview = production.review ?? ""
         isEditingReview = false
+    }
+
+    /// Save quotes
+    func saveQuotes() {
+        production.quotes = editedQuotes.isEmpty ? nil : editedQuotes
+        dataManager.saveQuietly()
+        HapticManager.shared.success()
+        Logger.shared.info("Updated quotes for: \(production.title)", category: .ui)
+    }
+
+    /// Cancel quotes edit
+    func cancelQuotesEdit() {
+        editedQuotes = production.quotes ?? ""
     }
 
     /// Add to ranking
@@ -232,6 +281,19 @@ final class MovieDetailViewModel {
     /// Has user review
     var hasReview: Bool {
         production.review?.isEmpty == false
+    }
+
+    /// Has user quotes
+    var hasQuotes: Bool {
+        production.quotes != nil && !(production.quotes?.isEmpty ?? true)
+    }
+
+    /// Quotes array (parsed from newlines)
+    var quotesArray: [String] {
+        production.quotes?
+            .components(separatedBy: "\n")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty } ?? []
     }
 
     /// Has user rating

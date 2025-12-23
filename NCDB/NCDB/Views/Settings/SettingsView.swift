@@ -43,7 +43,7 @@ struct SettingsView: View {
                             .disabled(viewModel.isSyncing)
 
                             Text("to retrieve additional details")
-                                .font(.body)
+                                .font(.body.pointSize(14))
                                 .foregroundStyle(Color.primaryText)
                         }
 

@@ -21,22 +21,43 @@ struct RankingCarousel: View {
 
     var body: some View {
         GeometryReader { geometry in
+            let screenWidth = geometry.size.width
+
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: Spacing.lg) {
+                    HStack(spacing: -180) {
                         ForEach(viewModel.rankedMovies, id: \.id) { movie in
                             let currentIndex = viewModel.rankedMovies.firstIndex(where: { $0.id == movie.id }) ?? 0
 
-                            NavigationLink(value: movie) {
-                                CompactRankingCard(
-                                    movie: movie,
-                                    rank: currentIndex + 1
+                            GeometryReader { cardGeometry in
+                                let midX = cardGeometry.frame(in: .global).midX
+                                let screenMidX = screenWidth / 2
+                                let offset = midX - screenMidX
+                                let normalizedOffset = offset / (screenWidth / 2)
+
+                                // Calculate effects based on distance from center
+                                let scale = 1.0 - min(abs(normalizedOffset) * 0.3, 0.3)
+                                let opacity = 1.0 - min(abs(normalizedOffset) * 0.2, 0.2)
+                                let rotation = normalizedOffset * 15
+
+                                NavigationLink(value: movie) {
+                                    CompactRankingCard(
+                                        movie: movie,
+                                        rank: currentIndex + 1
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isDragInProgress)
+                                .scaleEffect(draggedMovieID == movie.id ? 1.05 : scale)
+                                .opacity(draggedMovieID == movie.id ? 0.6 : opacity)
+                                .rotation3DEffect(
+                                    .degrees(rotation),
+                                    axis: (x: 0, y: 1, z: 0),
+                                    perspective: 0.6
                                 )
+                                .zIndex(1.0 - abs(normalizedOffset))
                             }
-                            .buttonStyle(.plain)
-                            .disabled(isDragInProgress)
-                            .scaleEffect(draggedMovieID == movie.id ? 1.05 : 1.0)
-                            .opacity(draggedMovieID == movie.id ? 0.6 : 1.0)
+                            .frame(width: 360, height: 840)
                             .id(movie.id)
                             .onDrag {
                                 guard !justCompletedDrop else {

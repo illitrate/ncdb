@@ -12,7 +12,6 @@ import SwiftData
 struct RankingsView: View {
     @Query private var productions: [Production]
     @State private var viewModel = RankingViewModel()
-    @State private var showingAddSheet = false
     @State private var showingShareSheet = false
     @State private var showAbout = false
     @State private var viewMode: ViewMode = .carousel
@@ -44,18 +43,12 @@ struct RankingsView: View {
                                     )
                                     .padding(.horizontal, Spacing.md)
                                 }
-
-                                // View mode toggle
-                                Picker("View Mode", selection: $viewMode) {
-                                    Label("Carousel", systemImage: "rectangle.stack.fill").tag(ViewMode.carousel)
-                                    Label("List", systemImage: "list.bullet").tag(ViewMode.list)
-                                }
-                                .pickerStyle(.segmented)
-                                .padding(.horizontal, Spacing.md)
+                                
+//                                Spacer()
 
                                 // Carousel display
                                 VStack(alignment: .leading, spacing: Spacing.sm) {
-                                    SectionHeader(title: "Your Rankings")
+//                                    SectionHeader(title: "Your Rankings")
                                     RankingCarousel(viewModel: viewModel)
                                 }
                             }
@@ -64,7 +57,7 @@ struct RankingsView: View {
                     } else {
                         // List mode - no ScrollView wrapper needed
                         VStack(spacing: 0) {
-                            // Header with podium and picker
+                            // Header with podium
                             VStack(spacing: Spacing.lg) {
                                 // Top 3 Podium
                                 if viewModel.topThree.count == 3 {
@@ -76,20 +69,12 @@ struct RankingsView: View {
                                     .padding(.horizontal, Spacing.md)
                                 }
 
-                                // View mode toggle
-                                Picker("View Mode", selection: $viewMode) {
-                                    Label("Carousel", systemImage: "rectangle.stack.fill").tag(ViewMode.carousel)
-                                    Label("List", systemImage: "list.bullet").tag(ViewMode.list)
-                                }
-                                .pickerStyle(.segmented)
-                                .padding(.horizontal, Spacing.md)
-
-                                SectionHeader(title: "Your Rankings")
-                                    .padding(.horizontal, Spacing.md)
+//                                SectionHeader(title: "Your Rankings")
+//                                    .padding(.horizontal, Spacing.md)
                             }
                             .padding(.vertical, Spacing.md)
                             .background(Color.primaryBackground)
-
+                            .padding(.vertical, Spacing.md)
                             // List takes remaining space
                             RankingList(viewModel: viewModel)
                         }
@@ -97,6 +82,18 @@ struct RankingsView: View {
                 }
             }
             .background(Color.primaryBackground)
+            .safeAreaInset(edge: .bottom) {
+                if !viewModel.rankedMovies.isEmpty {
+                    Picker("View Mode", selection: $viewMode) {
+                        Label("Carousel", systemImage: "rectangle.stack.fill").tag(ViewMode.carousel)
+                        Label("List", systemImage: "list.bullet").tag(ViewMode.list)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, Spacing.md)
+                    .padding(.vertical, Spacing.sm)
+                    .background(.ultraThinMaterial)
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
@@ -105,14 +102,6 @@ struct RankingsView: View {
                 ToolbarItem(placement: .principal) {
                     NCDBLogoView {
                         showAbout = true
-                    }
-                }
-
-                ToolbarItem(placement: .primaryAction) {
-                    Button {
-                        showingAddSheet = true
-                    } label: {
-                        Image(systemName: "plus")
                     }
                 }
 
@@ -137,9 +126,6 @@ struct RankingsView: View {
                         }
                     }
                 }
-            }
-            .sheet(isPresented: $showingAddSheet) {
-                AddToRankingSheet(viewModel: viewModel)
             }
             .sheet(isPresented: $showingShareSheet) {
                 ShareRankingView(viewModel: viewModel)
@@ -287,10 +273,6 @@ struct RankingRow: View {
             }
 
             Spacer()
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundStyle(Color.tertiaryText)
         }
         .padding(Spacing.sm)
         .background(Color.glassLight)

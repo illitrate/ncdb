@@ -123,7 +123,7 @@ struct CompactRankingCard: View {
             CachedAsyncImage(url: posterURL, placeholder: {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(Color.glassLight)
-                    .frame(width: 120, height: 180)
+                    .frame(width: 240, height: 360)
                     .overlay(
                         VStack {
                             Image(systemName: "film.fill")
@@ -142,7 +142,7 @@ struct CompactRankingCard: View {
                     .resizable()
                     .aspectRatio(contentMode: .fill)
             })
-            .frame(width: 120, height: 180)
+            .frame(width: 240, height: 360)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
             // Rank badge
@@ -161,7 +161,7 @@ struct CompactRankingCard: View {
                 .foregroundStyle(.white)
                 .padding(.horizontal, Spacing.sm)
             }
-            .frame(maxWidth: 120)
+            .frame(maxWidth: 240)
         }
     }
 

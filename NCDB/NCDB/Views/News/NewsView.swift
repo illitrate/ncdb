@@ -17,6 +17,7 @@ struct NewsView: View {
     @State private var isRefreshing = false
     @State private var selectedArticle: NewsArticle?
     @State private var showingSettings = false
+    @State private var showAbout = false
     @State private var searchQuery = ""
     @State private var selectedSource: String?
 
@@ -25,71 +26,78 @@ struct NewsView: View {
     private let filterService = NewsFilterService.shared
 
     var body: some View {
-        NavigationStack {
-            ZStack {
-                if filteredArticles.isEmpty && !isRefreshing {
-                    emptyState
-                } else {
-                    ScrollView {
-                        LazyVStack(spacing: Spacing.sm) {
-                            ForEach(filteredArticles) { article in
-                                NewsRow(article: article) {
-                                    selectedArticle = article
-                                    article.isRead = true
-                                    try? modelContext.save()
-                                }
+        ZStack {
+            if filteredArticles.isEmpty && !isRefreshing {
+                emptyState
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: Spacing.sm) {
+                        ForEach(filteredArticles) { article in
+                            NewsRow(article: article) {
+                                selectedArticle = article
+                                article.isRead = true
+                                try? modelContext.save()
                             }
                         }
-                        .padding()
                     }
-                    .refreshable {
-                        await refreshNews()
-                    }
+                    .padding()
                 }
-            }
-            .navigationTitle("News")
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button {
-                            Task { await refreshNews() }
-                        } label: {
-                            Label("Refresh", systemImage: "arrow.clockwise")
-                        }
-                        .disabled(isRefreshing)
-
-                        Divider()
-
-                        Button {
-                            cacheManager.markAllAsRead(modelContext: modelContext)
-                        } label: {
-                            Label("Mark All as Read", systemImage: "envelope.open")
-                        }
-                        .disabled(unreadCount == 0)
-
-                        Button {
-                            showingSettings = true
-                        } label: {
-                            Label("Settings", systemImage: "gear")
-                        }
-
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
-                    }
-                }
-            }
-            .searchable(text: $searchQuery, prompt: "Search articles")
-            .sheet(item: $selectedArticle) { article in
-                NewsArticleDetailView(article: article)
-            }
-            .sheet(isPresented: $showingSettings) {
-                NewsSettingsView()
-            }
-            .task {
-                // Initial load if needed
-                if allArticles.isEmpty || cacheManager.shouldRefreshNews {
+                .refreshable {
                     await refreshNews()
                 }
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                NCDBLogoView {
+                    showAbout = true
+                }
+            }
+
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    Button {
+                        Task { await refreshNews() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .disabled(isRefreshing)
+
+                    Divider()
+
+                    Button {
+                        cacheManager.markAllAsRead(modelContext: modelContext)
+                    } label: {
+                        Label("Mark All as Read", systemImage: "envelope.open")
+                    }
+                    .disabled(unreadCount == 0)
+
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Label("Settings", systemImage: "gear")
+                    }
+
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+            }
+        }
+        .searchable(text: $searchQuery, prompt: "Search articles")
+        .sheet(item: $selectedArticle) { article in
+            NewsArticleDetailView(article: article)
+        }
+        .sheet(isPresented: $showingSettings) {
+            NewsSettingsView()
+        }
+        .sheet(isPresented: $showAbout) {
+            AboutView()
+        }
+        .task {
+            // Initial load if needed
+            if allArticles.isEmpty || cacheManager.shouldRefreshNews {
+                await refreshNews()
             }
         }
     }

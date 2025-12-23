@@ -8,6 +8,14 @@
 import SwiftUI
 import SwiftData
 
+/// Navigation destinations for HomeView
+enum HomeNavigationDestination: Hashable {
+    case watchlist
+    case achievements
+    case news
+    case stats
+}
+
 /// Home/Dashboard view
 struct HomeView: View {
     @Query private var productions: [Production]
@@ -30,35 +38,43 @@ struct HomeView: View {
                     }
                     .padding(.horizontal, Spacing.md)
 
-                    // Quick Stats
+                    // Quick Stats (tap to view full stats)
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
-                        StatCard(
-                            title: "Watched",
-                            value: "\(viewModel.watchedCount)",
-                            icon: "checkmark.circle.fill",
-                            color: .green
-                        )
+                        NavigationLink(value: HomeNavigationDestination.stats) {
+                            StatCard(
+                                title: "Watched",
+                                value: "\(viewModel.watchedCount)",
+                                icon: "checkmark.circle.fill",
+                                color: .green
+                            )
+                        }
 
-                        StatCard(
-                            title: "Avg Rating",
-                            value: viewModel.formattedAverageRating,
-                            icon: "star.fill",
-                            color: .cageGold
-                        )
+                        NavigationLink(value: HomeNavigationDestination.stats) {
+                            StatCard(
+                                title: "Avg Rating",
+                                value: viewModel.formattedAverageRating,
+                                icon: "star.fill",
+                                color: .cageGold
+                            )
+                        }
 
-                        StatCard(
-                            title: "Total Runtime",
-                            value: viewModel.formattedTotalRuntime,
-                            icon: "clock.fill",
-                            color: .blue
-                        )
+                        NavigationLink(value: HomeNavigationDestination.stats) {
+                            StatCard(
+                                title: "Total Runtime",
+                                value: viewModel.formattedTotalRuntime,
+                                icon: "clock.fill",
+                                color: .blue
+                            )
+                        }
 
-                        StatCard(
-                            title: "Completion",
-                            value: viewModel.formattedCompletionPercentage,
-                            icon: "chart.pie.fill",
-                            color: .purple
-                        )
+                        NavigationLink(value: HomeNavigationDestination.stats) {
+                            StatCard(
+                                title: "Completion",
+                                value: viewModel.formattedCompletionPercentage,
+                                icon: "chart.pie.fill",
+                                color: .purple
+                            )
+                        }
                     }
                     .padding(.horizontal, Spacing.md)
 
@@ -86,12 +102,10 @@ struct HomeView: View {
                             HStack {
                                 SectionHeader(title: "Recent Achievements")
                                 Spacer()
-                                NavigationLink("See All") {
-                                    AchievementsView()
-                                }
-                                .font(.caption)
-                                .foregroundStyle(Color.cageGold)
-                                .padding(.trailing, Spacing.md)
+                                NavigationLink("See All", value: HomeNavigationDestination.achievements)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.cageGold)
+                                    .padding(.trailing, Spacing.md)
                             }
 
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -116,12 +130,10 @@ struct HomeView: View {
                             HStack {
                                 SectionHeader(title: "Watchlist")
                                 Spacer()
-                                NavigationLink("See All") {
-                                    WatchlistView()
-                                }
-                                .font(.caption)
-                                .foregroundStyle(Color.cageGold)
-                                .padding(.trailing, Spacing.md)
+                                NavigationLink("See All", value: HomeNavigationDestination.watchlist)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.cageGold)
+                                    .padding(.trailing, Spacing.md)
                             }
 
                             ScrollView(.horizontal, showsIndicators: false) {
@@ -141,14 +153,14 @@ struct HomeView: View {
                     if !recentNews.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             HStack {
-                                SectionHeader(title: "Latest News")
-                                Spacer()
-                                NavigationLink("See All") {
-                                    NewsView()
+                                NavigationLink(value: HomeNavigationDestination.news) {
+                                    SectionHeader(title: "Latest News")
                                 }
-                                .font(.caption)
-                                .foregroundStyle(Color.cageGold)
-                                .padding(.trailing, Spacing.md)
+                                Spacer()
+                                NavigationLink("See All", value: HomeNavigationDestination.news)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.cageGold)
+                                    .padding(.trailing, Spacing.md)
                             }
 
                             VStack(spacing: Spacing.xs) {
@@ -182,6 +194,18 @@ struct HomeView: View {
                     NCDBLogoView {
                         showAbout = true
                     }
+                }
+            }
+            .navigationDestination(for: HomeNavigationDestination.self) { destination in
+                switch destination {
+                case .watchlist:
+                    WatchlistView()
+                case .achievements:
+                    AchievementsView()
+                case .news:
+                    NewsView()
+                case .stats:
+                    StatsView()
                 }
             }
             .navigationDestination(for: Production.self) { production in

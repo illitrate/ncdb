@@ -160,21 +160,15 @@ struct MoviePosterCard: View {
     @ViewBuilder
     private var posterImage: some View {
         if let posterPath = movie.posterPath {
-            AsyncImage(url: URL(string: "\(TMDbConstants.imageBaseURL)/w342\(posterPath)")) { phase in
-                switch phase {
-                case .empty:
-                    posterPlaceholder
-                        .overlay(ProgressView())
-                case .success(let image):
+            CachedAsyncImage(
+                url: URL(string: "\(TMDbConstants.imageBaseURL)/w342\(posterPath)"),
+                placeholder: { posterPlaceholder },
+                content: { image in
                     image
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                case .failure:
-                    posterPlaceholder
-                @unknown default:
-                    posterPlaceholder
                 }
-            }
+            )
         } else {
             posterPlaceholder
         }

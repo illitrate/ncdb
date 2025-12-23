@@ -17,6 +17,12 @@ final class RankingViewModel {
 
     private let dataManager = DataManager.shared
 
+    /// Flag to prevent infinite loop when auto-ranking triggers rating changes
+    private var isAutoRanking = false
+
+    /// Observer token for notification cleanup
+    nonisolated(unsafe) private var notificationObserver: NSObjectProtocol?
+
     /// All ranked movies sorted by position
     var rankedMovies: [Production] = []
 
@@ -28,6 +34,20 @@ final class RankingViewModel {
 
     /// Drag state for reordering
     var draggedMovie: Production?
+
+    // MARK: - Initialization
+
+    init() {
+        // Setup notification observer immediately so it's ready before user rates movies
+        setupNotificationObserver()
+    }
+
+    deinit {
+        // Clean up notification observer
+        if let observer = notificationObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     // MARK: - Computed Properties
 
@@ -80,6 +100,22 @@ final class RankingViewModel {
         Logger.shared.debug("Loaded \(ranked.count) ranked movies, \(available.count) available", category: .ui)
     }
 
+    /// Setup notification observer for rating changes
+    private func setupNotificationObserver() {
+        // Only set up once
+        guard notificationObserver == nil else { return }
+
+        notificationObserver = NotificationCenter.default.addObserver(
+            forName: Notification.Name("autoAdjustRanking"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            if let movie = notification.object as? Production {
+                self?.autoAdjustRankingOnRatingChange(movie)
+            }
+        }
+    }
+
     // MARK: - Ranking Operations
 
     /// Add a movie to rankings at the end
@@ -122,6 +158,59 @@ final class RankingViewModel {
         Logger.shared.info("Removed \(movie.title) from rankings (was position \(currentPosition))", category: .general)
     }
 
+    /// Auto-adjust ranking based on rating change
+    func autoAdjustRankingOnRatingChange(_ movie: Production) {
+        guard !isAutoRanking else { return }  // Prevent infinite loop
+
+        let rating = movie.userRating ?? 0
+
+        // Set flag to prevent rating updates during auto-ranking
+        isAutoRanking = true
+        defer { isAutoRanking = false }
+
+        // Remove from rankings if rating is 0 (regardless of watched status)
+        if rating == 0 && movie.isRanked {
+            removeFromRankings(movie)
+            Logger.shared.info("Removed \(movie.title) from rankings (rating set to 0)", category: .general)
+        }
+        // Add/reorder only if watched and rated >= 0.5
+        else if rating >= 0.5 && movie.watched {
+            let newPosition = calculatePositionFromRating(rating)
+
+            if movie.isRanked {
+                // Reorder existing ranked movie
+                if let currentIndex = rankedMovies.firstIndex(where: { $0.id == movie.id }) {
+                    reorderMovie(movie, to: newPosition - 1)  // Convert to 0-indexed
+                }
+            } else {
+                // Insert at calculated position
+                insertAtPosition(movie, position: newPosition)
+            }
+        }
+    }
+
+    /// Calculate appropriate position based on rating
+    private func calculatePositionFromRating(_ rating: Double) -> Int {
+        // Find position where this rating fits (higher rating = lower position number)
+        for (index, rankedMovie) in rankedMovies.enumerated() {
+            if rating > (rankedMovie.userRating ?? 0) {
+                return index + 1
+            }
+        }
+        return rankedMovies.count + 1
+    }
+
+    /// Insert movie at specific position
+    private func insertAtPosition(_ movie: Production, position: Int) {
+        movie.rankingPosition = position
+        rankedMovies.insert(movie, at: position - 1)
+        availableMovies.removeAll { $0.id == movie.id }
+        updatePositions()
+        try? dataManager.save()
+        HapticManager.shared.success()
+        Logger.shared.info("Auto-ranked \(movie.title) at position \(position)", category: .general)
+    }
+
     /// Move a movie to a new position in rankings
     func moveMovie(from source: IndexSet, to destination: Int) {
         rankedMovies.move(fromOffsets: source, toOffset: destination)
@@ -144,7 +233,12 @@ final class RankingViewModel {
         // Create new array to trigger observation
         var newRanking = rankedMovies
         newRanking.remove(at: oldIndex)
-        newRanking.insert(movie, at: newIndex)
+
+        // Clamp newIndex to valid range after removal
+        let validMaxIndex = newRanking.count  // Can insert at count to append
+        let clampedIndex = min(newIndex, validMaxIndex)
+
+        newRanking.insert(movie, at: clampedIndex)
         rankedMovies = newRanking
 
         Logger.shared.info("📝 VM: After: \(rankedMovies.map { $0.title })", category: .ui)
@@ -161,8 +255,23 @@ final class RankingViewModel {
 
     /// Update all ranking positions after reordering
     private func updatePositions() {
+        let totalMovies = rankedMovies.count
+
         for (index, movie) in rankedMovies.enumerated() {
             movie.rankingPosition = index + 1
+
+            // Update rating based on position (linear scale)
+            // Only update if NOT auto-ranking (to prevent infinite loop)
+            if !isAutoRanking {
+                if totalMovies > 1 {
+                    let rating = 5.0 - (Double(index) / Double(totalMovies - 1)) * 4.5
+                    // Round to 2 decimal places for precision with 100+ movies
+                    let roundedRating = (rating * 100).rounded() / 100
+                    movie.userRating = max(0.50, min(5.00, roundedRating))
+                } else {
+                    movie.userRating = 5.00  // Single movie gets max rating
+                }
+            }
         }
     }
 

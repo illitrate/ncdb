@@ -340,7 +340,7 @@ final class AchievementManager {
                 description: "Watch Face/Off",
                 category: .special,
                 icon: "person.2.fill",
-                requirement: .watchSpecificMovie(tmdbID: 10428)
+                requirement: .watchSpecificMovie(tmdbID: 36)
             ),
             AchievementDefinition(
                 id: "con_air",
@@ -348,7 +348,7 @@ final class AchievementManager {
                 description: "Watch Con Air",
                 category: .special,
                 icon: "airplane",
-                requirement: .watchSpecificMovie(tmdbID: 1637)
+                requirement: .watchSpecificMovie(tmdbID: 1701)
             ),
             AchievementDefinition(
                 id: "the_rock",
@@ -364,7 +364,7 @@ final class AchievementManager {
                 description: "Watch Leaving Las Vegas",
                 category: .special,
                 icon: "lightbulb.fill",
-                requirement: .watchSpecificMovie(tmdbID: 11545)
+                requirement: .watchSpecificMovie(tmdbID: 682)
             ),
             AchievementDefinition(
                 id: "adaptation",
@@ -372,7 +372,7 @@ final class AchievementManager {
                 description: "Watch Adaptation",
                 category: .special,
                 icon: "books.vertical.fill",
-                requirement: .watchSpecificMovie(tmdbID: 11324)
+                requirement: .watchSpecificMovie(tmdbID: 9551)
             ),
             AchievementDefinition(
                 id: "mandy",
@@ -388,7 +388,7 @@ final class AchievementManager {
                 description: "Watch Pig",
                 category: .special,
                 icon: "leaf.fill",
-                requirement: .watchSpecificMovie(tmdbID: 633018)
+                requirement: .watchSpecificMovie(tmdbID: 635731)
             ),
             AchievementDefinition(
                 id: "raising_arizona",
@@ -404,7 +404,7 @@ final class AchievementManager {
                 description: "Watch The Wicker Man (2006)",
                 category: .special,
                 icon: "flame.fill",
-                requirement: .watchSpecificMovie(tmdbID: 9003)
+                requirement: .watchSpecificMovie(tmdbID: 9708)
             ),
             AchievementDefinition(
                 id: "first_review",
@@ -513,7 +513,18 @@ final class AchievementManager {
             return decadeCount >= count
 
         case .watchSpecificMovie(let tmdbID):
-            return watchedProductions.contains { $0.tmdbID == tmdbID }
+            let hasMatch = watchedProductions.contains { $0.tmdbID == tmdbID }
+
+            // Debug logging to help identify ID mismatches
+            if !hasMatch {
+                let watchedIDs = watchedProductions.compactMap { $0.tmdbID }
+                Logger.shared.debug(
+                    "Specific movie achievement check: Looking for tmdbID \(tmdbID), have watched movies with IDs: \(watchedIDs)",
+                    category: .general
+                )
+            }
+
+            return hasMatch
 
         case .reviewCount(let count):
             let reviewCount = watchedProductions.filter { production in
@@ -583,7 +594,7 @@ final class AchievementManager {
         // Post notification for UI updates
         NotificationCenter.default.post(
             name: .achievementUnlocked,
-            object: definition
+            object: definition.id
         )
     }
 
