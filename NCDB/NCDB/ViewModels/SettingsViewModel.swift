@@ -71,6 +71,20 @@ final class SettingsViewModel {
         set { NotificationManager.shared.achievementNotificationsEnabled = newValue }
     }
 
+    /// Content filtering preferences
+    private let hideNonActingKey = "hideNonActingAppearances"
+    private let hideDocumentariesKey = "hideDocumentaries"
+
+    var hideNonActingAppearances: Bool {
+        get { UserDefaults.standard.bool(forKey: hideNonActingKey) }
+        set { UserDefaults.standard.set(newValue, forKey: hideNonActingKey) }
+    }
+
+    var hideDocumentaries: Bool {
+        get { UserDefaults.standard.bool(forKey: hideDocumentariesKey) }
+        set { UserDefaults.standard.set(newValue, forKey: hideDocumentariesKey) }
+    }
+
     /// Services
     private let dataManager = DataManager.shared
     private var tmdbService: TMDbService?
@@ -80,6 +94,9 @@ final class SettingsViewModel {
     // MARK: - Initialization
 
     init() {
+        // Register default values for UserDefaults
+        registerDefaults()
+
         loadAPIKey()
         // Initialize TMDbService if API key exists
         if let savedKey = keychainHelper.getTMDbAPIKey() {
@@ -89,6 +106,15 @@ final class SettingsViewModel {
             await loadCacheSize()
         }
         startTimeUpdateTimer()
+    }
+
+    /// Register default values for UserDefaults
+    private func registerDefaults() {
+        let defaults: [String: Any] = [
+            hideNonActingKey: true,
+            hideDocumentariesKey: true
+        ]
+        UserDefaults.standard.register(defaults: defaults)
     }
 
     /// Start timer to update relative time display

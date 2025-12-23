@@ -86,6 +86,29 @@ final class MovieListViewModel {
     func filtered(_ productions: [Production]) -> [Production] {
         var filtered = productions
 
+        // Apply content filtering (non-acting appearances, documentaries)
+        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
+        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
+
+        filtered = filtered.filter { production in
+            // If manually included, always show
+            if production.manuallyIncluded {
+                return true
+            }
+
+            // Apply non-acting filter
+            if hideNonActing && production.isNonActingAppearance {
+                return false
+            }
+
+            // Apply documentary filter
+            if hideDocumentaries && production.productionType == .documentary {
+                return false
+            }
+
+            return true
+        }
+
         // Apply search query
         if !searchQuery.isEmpty {
             filtered = filtered.filter { production in

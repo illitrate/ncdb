@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var showingClearDataConfirmation = false
     @State private var showingResetAppConfirmation = false
     @State private var showAbout = false
+    @State private var showingFilteredItems = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
@@ -66,6 +67,28 @@ struct SettingsView: View {
                     Toggle("Notifications", isOn: $viewModel.notificationsEnabled)
                     Toggle("Achievement Notifications", isOn: $viewModel.achievementNotificationsEnabled)
                         .disabled(!viewModel.notificationsEnabled)
+                }
+
+                // Content Filtering
+                Section {
+                    Toggle("Hide Non-Acting Appearances", isOn: $viewModel.hideNonActingAppearances)
+                    Toggle("Hide Documentaries", isOn: $viewModel.hideDocumentaries)
+
+                    Button {
+                        showingFilteredItems = true
+                    } label: {
+                        HStack {
+                            Label("View Filtered Items", systemImage: "eye.slash.fill")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiaryText)
+                        }
+                    }
+                } header: {
+                    Text("Content Filtering")
+                } footer: {
+                    Text("Filter out documentaries and appearances where Nicolas Cage is interviewed or featured as himself rather than acting in a role.")
                 }
 
                 // Cache
@@ -136,6 +159,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showAbout) {
                 AboutView()
+            }
+            .sheet(isPresented: $showingFilteredItems) {
+                FilteredItemsView()
             }
             .task {
                 // Refresh API key status and time display when view appears

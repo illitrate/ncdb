@@ -37,6 +37,10 @@ final class UserPreferences {
     var newsScrapeFrequency: NewsScrapeFrequency = NewsScrapeFrequency.daily
     var enableBackgroundNewsRefresh: Bool = true
 
+    // Content Filtering
+    var hideNonActingAppearances: Bool = true
+    var hideDocumentaries: Bool = true
+
     init() {
         self.id = UUID()
     }

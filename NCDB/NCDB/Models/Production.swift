@@ -27,6 +27,11 @@ final class Production: Hashable {
     var budget: Int?
     var boxOffice: Int?
 
+    // Filtering metadata (for non-acting appearances)
+    var characterName: String? // Character Nic Cage played (e.g., "Castor Troy")
+    var isNonActingAppearance: Bool = false // True if appearing as "Self", in documentaries, etc.
+    var manuallyIncluded: Bool = false // User override to include despite filters
+
     // User Data
     var watched: Bool = false
     var dateWatched: Date?
@@ -111,6 +116,19 @@ extension Production {
     /// Check if this production is ranked
     var isRanked: Bool {
         rankingPosition != nil
+    }
+
+    /// Check if this item would be filtered (before considering manuallyIncluded)
+    var wouldBeFiltered: Bool {
+        // Documentary type
+        if productionType == .documentary {
+            return true
+        }
+        // Non-acting appearance
+        if isNonActingAppearance {
+            return true
+        }
+        return false
     }
 }
 

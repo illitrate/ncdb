@@ -152,6 +152,10 @@ struct DataSeedingView: View {
                 production.posterPath = tmdbMovie.posterPath
                 production.plot = tmdbMovie.overview
 
+                // Store character name and detect non-acting appearances
+                production.characterName = tmdbMovie.character
+                production.isNonActingAppearance = isNonActingRole(character: tmdbMovie.character)
+
                 modelContext.insert(production)
 
                 // Update progress every 10 movies
@@ -185,6 +189,41 @@ struct DataSeedingView: View {
             isLoading = false
             HapticManager.shared.error()
             Logger.shared.error("TMDb import failed: \(error)", category: .tmdb)
+        }
+    }
+
+    /// Detect if a character name indicates a non-acting appearance
+    private func isNonActingRole(character: String?) -> Bool {
+        guard let character = character?.lowercased() else {
+            return false // Nil character doesn't necessarily mean non-acting
+        }
+
+        let nonActingIndicators = [
+            "self",
+            "himself",
+            "narrator",
+            "archive footage",
+            "host",
+            "interviewee",
+            "guest",
+            "participant"
+        ]
+
+        // Use word boundary matching to avoid false positives (e.g., "ghost" containing "host")
+        // Split character name into words and check for exact matches
+        let words = character.components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+
+        return nonActingIndicators.contains { indicator in
+            // Check if the indicator appears as a complete word
+            let indicatorWords = indicator.components(separatedBy: " ")
+            if indicatorWords.count == 1 {
+                // Single word indicator - check if it matches any word in character name
+                return words.contains(indicator)
+            } else {
+                // Multi-word indicator (like "archive footage") - check if phrase exists
+                return character.contains(indicator)
+            }
         }
     }
 }

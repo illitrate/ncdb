@@ -406,22 +406,35 @@ NCDB/
 
 **Goal:** Comprehensive settings management
 
-- [ ] Create SettingsView
-  - [ ] Account section (TMDb API key management)
+- [x] Create SettingsView
+  - [x] Account section (TMDb API key management)
   - [ ] Appearance section (theme options)
-  - [ ] Data & Sync section
+  - [x] Data & Sync section
   - [ ] Display preferences
-  - [ ] Notifications settings
+  - [x] Notifications settings
   - [ ] Export & backup options
-  - [ ] About section
-  - [ ] Advanced/danger zone
-- [ ] Implement UserPreferences model
-- [ ] Create preference storage logic
-- [ ] Build settings screens for each section
+  - [x] About section
+  - [x] Advanced/danger zone
+  - [x] **Content Filtering section** ⭐ NEW
+    - [x] Toggle: Hide non-acting appearances
+    - [x] Toggle: Hide documentaries
+    - [x] Button: View filtered items management screen
+- [x] Implement UserPreferences model
+- [x] Create preference storage logic
+- [x] Build settings screens for each section
 - [ ] Add data export/import functionality
-- [ ] Implement cache management controls
+- [x] Implement cache management controls
+- [x] **Content Filtering System** ⭐ NEW
+  - [x] Add filtering metadata to Production model (characterName, isNonActingAppearance, manuallyIncluded)
+  - [x] Implement smart detection during TMDb import (detects "Self", "Himself", etc.)
+  - [x] Create FilteredItemsView for reviewing and overriding filters
+  - [x] Apply filters across all views (MovieList, Home, Rankings, Stats)
+  - [x] User-controlled filter toggles with defaults (both enabled)
+  - [x] Manual override system per-item via checkboxes
+  - [x] Display filter reasons (Documentary, Non-acting)
+  - [x] Word-boundary matching to avoid false positives (fixed "ghost"/"host" bug)
 
-**Test Checkpoint:** Change settings, verify they persist and affect app behavior
+**Test Checkpoint:** Change settings, verify they persist and affect app behavior. Toggle content filters and verify filtered items can be reviewed and manually included.
 
 ---
 
@@ -804,6 +817,7 @@ Throughout development, test the build at these key moments:
 ✅ Offline mode with caching
 ✅ Rewatch tracking
 ✅ External ratings display (IMDb, RT)
+✅ **Content filtering with user control** (hide non-acting appearances & documentaries)
 
 ### Future Enhancement Ideas (Post-Launch)
 - Multiple actor support (beyond Nic Cage)

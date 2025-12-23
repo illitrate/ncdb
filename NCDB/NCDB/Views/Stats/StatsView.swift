@@ -15,8 +15,33 @@ struct StatsView: View {
     @State private var viewModel = StatsViewModel()
     @State private var showAbout = false
 
+    /// Apply content filtering to productions
+    private var filteredProductions: [Production] {
+        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
+        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
+
+        return productions.filter { production in
+            // If manually included, always show
+            if production.manuallyIncluded {
+                return true
+            }
+
+            // Apply non-acting filter
+            if hideNonActing && production.isNonActingAppearance {
+                return false
+            }
+
+            // Apply documentary filter
+            if hideDocumentaries && production.productionType == .documentary {
+                return false
+            }
+
+            return true
+        }
+    }
+
     private var watchedProductions: [Production] {
-        productions.filter { $0.watched }
+        filteredProductions.filter { $0.watched }
     }
 
     private var totalRuntime: Int {
@@ -30,7 +55,7 @@ struct StatsView: View {
     }
 
     private var favoriteCount: Int {
-        productions.filter { $0.isFavorite }.count
+        filteredProductions.filter { $0.isFavorite }.count
     }
 
     var body: some View {
@@ -51,7 +76,7 @@ struct StatsView: View {
             }
         }
         .task {
-            await viewModel.loadStatistics(productions: productions)
+            await viewModel.loadStatistics(productions: filteredProductions)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()

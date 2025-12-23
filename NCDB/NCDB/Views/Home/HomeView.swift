@@ -25,6 +25,31 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showAbout = false
 
+    /// Apply content filtering to productions
+    private var filteredProductions: [Production] {
+        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
+        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
+
+        return productions.filter { production in
+            // If manually included, always show
+            if production.manuallyIncluded {
+                return true
+            }
+
+            // Apply non-acting filter
+            if hideNonActing && production.isNonActingAppearance {
+                return false
+            }
+
+            // Apply documentary filter
+            if hideDocumentaries && production.productionType == .documentary {
+                return false
+            }
+
+            return true
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -212,10 +237,10 @@ struct HomeView: View {
                 MovieDetailView(production: production)
             }
             .task {
-                await viewModel.loadDashboardData(productions: productions)
+                await viewModel.loadDashboardData(productions: filteredProductions)
             }
             .refreshable {
-                await viewModel.loadDashboardData(productions: productions)
+                await viewModel.loadDashboardData(productions: filteredProductions)
             }
         }
         .sheet(isPresented: $showAbout) {

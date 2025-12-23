@@ -99,7 +99,7 @@ final class DataManager {
 
     // MARK: - Production Operations
 
-    /// Fetch all productions
+    /// Fetch all productions (including filtered ones)
     func fetchAllProductions() throws -> [Production] {
         guard let context = modelContext else {
             throw DataManagerError.notConfigured
@@ -110,6 +110,35 @@ final class DataManager {
         )
 
         return try context.fetch(descriptor)
+    }
+
+    /// Fetch productions with user filter preferences applied
+    func fetchFilteredProductions() throws -> [Production] {
+        let allProductions = try fetchAllProductions()
+
+        // Get filter preferences from UserDefaults
+        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
+        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
+
+        // Apply filters
+        return allProductions.filter { production in
+            // If manually included, always show
+            if production.manuallyIncluded {
+                return true
+            }
+
+            // Apply non-acting filter
+            if hideNonActing && production.isNonActingAppearance {
+                return false
+            }
+
+            // Apply documentary filter
+            if hideDocumentaries && production.productionType == .documentary {
+                return false
+            }
+
+            return true
+        }
     }
 
     /// Fetch productions with predicate
@@ -124,22 +153,22 @@ final class DataManager {
         return try context.fetch(descriptor)
     }
 
-    /// Fetch watched productions
+    /// Fetch watched productions (with filters applied)
     func fetchWatchedProductions() throws -> [Production] {
-        let predicate = #Predicate<Production> { $0.watched }
-        return try fetchProductions(matching: predicate)
+        let filtered = try fetchFilteredProductions()
+        return filtered.filter { $0.watched }
     }
 
-    /// Fetch unwatched productions
+    /// Fetch unwatched productions (with filters applied)
     func fetchUnwatchedProductions() throws -> [Production] {
-        let predicate = #Predicate<Production> { !$0.watched }
-        return try fetchProductions(matching: predicate)
+        let filtered = try fetchFilteredProductions()
+        return filtered.filter { !$0.watched }
     }
 
-    /// Fetch favorite productions
+    /// Fetch favorite productions (with filters applied)
     func fetchFavoriteProductions() throws -> [Production] {
-        let predicate = #Predicate<Production> { $0.isFavorite }
-        return try fetchProductions(matching: predicate)
+        let filtered = try fetchFilteredProductions()
+        return filtered.filter { $0.isFavorite }
     }
 
     /// Fetch ranked productions
