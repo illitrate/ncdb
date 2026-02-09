@@ -22,7 +22,7 @@
 NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design language. It pulls Nicolas Cage's complete filmography from TMDb and gives you a rich set of tools to track what you've watched, rate and review every film, build your personal rankings, earn achievements, and stay up to date with the latest Cage news — all wrapped in a dark-and-gold aesthetic that feels right at home on iOS 26.
 
 <p align="center">
-  <img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20About%20Screen%20Medium.jpeg?raw=true" width="250" alt="NCDB About Screen"/>
+  <img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20About%20Screen%20Medium.jpeg?raw=true" width="200" alt="NCDB About Screen"/>
 </p>
 
 ---
@@ -31,7 +31,7 @@ NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design lang
 
 ### Dashboard at a Glance
 
-<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Home%20Screen%20Medium.jpeg?raw=true" width="250" align="right" alt="NCDB Home Screen"/>
+<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Home%20Screen%20Medium.jpeg?raw=true" width="150" align="right" alt="NCDB Home Screen"/>
 
 - Personalised home screen with time-of-day greeting
 - Quick stats: films watched, average rating, total runtime, completion percentage
@@ -41,7 +41,7 @@ NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design lang
 
 ### Browse the Complete Filmography
 
-<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Movie%20list%20Medium.jpeg?raw=true" width="250" align="right" alt="NCDB Movie List"/>
+<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Movie%20list%20Medium.jpeg?raw=true" width="150" align="right" alt="NCDB Movie List"/>
 
 - Every Nicolas Cage film, TV appearance, and documentary in one place, sourced live from **TMDb**
 - Grid or list view with real-time search and advanced filtering by genre, year, type, and watch status
@@ -59,7 +59,7 @@ NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design lang
 
 ### Rank Your Favourites
 
-<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Rankings%20view%20Medium.jpeg?raw=true" width="250" align="right" alt="NCDB Rankings View"/>
+<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Rankings%20view%20Medium.jpeg?raw=true" width="150" align="right" alt="NCDB Rankings View"/>
 
 - Interactive **ranking carousel** with 3D parallax card effects and drag-and-drop reordering
 - Podium display highlights your top 3
@@ -71,7 +71,7 @@ NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design lang
 
 ### Earn Achievements
 
-<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Achievments%20Medium.jpeg?raw=true" width="250" align="right" alt="NCDB Achievements"/>
+<img src="https://github.com/illitrate/ncdb/blob/main/Docs/NCDB%20Achievments%20Medium.jpeg?raw=true" width="150" align="right" alt="NCDB Achievements"/>
 
 - **50+ achievements** across six categories: Watching, Rating, Streak, Ranking, Collection, and Special
 - Real-time progress tracking with visual indicators on locked badges
