@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import UIKit
 import WidgetKit
 
 /// Service for sharing data between the main app and widgets via App Groups
@@ -49,7 +50,7 @@ final class WidgetDataService {
     /// Update widget data and refresh all widgets
     func updateWidgetData(
         productions: [Production],
-        achievements: [NCDB.Achievement]
+        achievements: [Achievement]
     ) {
         let watchedProductions = productions.filter { $0.watched }
         let rankedProductions = productions
@@ -60,9 +61,16 @@ final class WidgetDataService {
         let ratings = watchedProductions.compactMap { $0.userRating }
         let averageRating = ratings.isEmpty ? 0.0 : ratings.reduce(0.0, +) / Double(ratings.count)
 
-        // Get top 3 ranked movies
+        // Get top 3 ranked movies and copy their posters to shared container
         let topRanked = rankedProductions.prefix(3).map { production in
-            WidgetData.RankedMovie(
+            // Copy poster to shared container for widget access
+            if let posterPath = production.posterPath {
+                Task {
+                    await copyPosterToSharedContainer(posterPath: posterPath)
+                }
+            }
+
+            return WidgetData.RankedMovie(
                 title: production.title,
                 year: production.releaseYear,
                 rank: production.rankingPosition ?? 0,
@@ -124,7 +132,7 @@ final class WidgetDataService {
     // MARK: - Load Widget Data
 
     /// Load widget data from shared container (used by widget extension)
-    static func loadWidgetData() -> WidgetData? {
+    nonisolated static func loadWidgetData() -> WidgetData? {
         guard let sharedDefaults = UserDefaults(suiteName: "group.com.ncdb.shared") else {
             return nil
         }
@@ -174,6 +182,56 @@ final class WidgetDataService {
         } else {
             return ["Small", "Medium", "Large"]
         }
+    }
+
+    // MARK: - Shared Image Cache
+
+    /// Copy a poster image from app cache to shared container for widget access
+    private func copyPosterToSharedContainer(posterPath: String) async {
+        // Get image from app's cache
+        let imageURL = URL(string: "\(TMDbConstants.imageBaseURL)/w500\(posterPath)")!
+        guard let cachedImage = await ImageCacheManager.shared.imageFromDisk(for: imageURL) else {
+            return
+        }
+
+        // Get shared container URL
+        guard let sharedContainer = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupIdentifier
+        ) else {
+            Logger.shared.error("Failed to access shared container", category: .general)
+            return
+        }
+
+        // Create widget images directory
+        let widgetImagesURL = sharedContainer.appendingPathComponent("WidgetImages", isDirectory: true)
+        try? FileManager.default.createDirectory(at: widgetImagesURL, withIntermediateDirectories: true)
+
+        // Save image to shared container
+        let fileName = posterPath.replacingOccurrences(of: "/", with: "_")
+        let fileURL = widgetImagesURL.appendingPathComponent(fileName)
+
+        if let imageData = cachedImage.jpegData(compressionQuality: 0.8) {
+            try? imageData.write(to: fileURL)
+        }
+    }
+
+    /// Load a poster image from shared container (used by widgets)
+    nonisolated static func loadSharedPosterImage(posterPath: String) -> UIImage? {
+        guard let sharedContainer = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.com.ncdb.shared"
+        ) else {
+            return nil
+        }
+
+        let widgetImagesURL = sharedContainer.appendingPathComponent("WidgetImages", isDirectory: true)
+        let fileName = posterPath.replacingOccurrences(of: "/", with: "_")
+        let fileURL = widgetImagesURL.appendingPathComponent(fileName)
+
+        guard let imageData = try? Data(contentsOf: fileURL) else {
+            return nil
+        }
+
+        return UIImage(data: imageData)
     }
 }
 

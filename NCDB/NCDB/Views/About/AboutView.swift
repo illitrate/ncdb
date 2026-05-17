@@ -10,6 +10,7 @@ import SwiftUI
 /// About view with app information, usage instructions, and TMDb setup guide
 struct AboutView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var viewModel = SettingsViewModel()
 
     var body: some View {
         NavigationStack {
@@ -129,7 +130,10 @@ struct AboutView: View {
 
                     // Footer
                     VStack(spacing: Spacing.xs) {
-                        Text("Version \(AppConstants.appVersion)")
+                        Text("Version \(viewModel.fullVersionString)")
+                            .font(Typography.caption1)
+                            .foregroundStyle(Color.tertiaryText)
+                        Text("©2025 illitrate Publichason Ltd.")
                             .font(Typography.caption1)
                             .foregroundStyle(Color.tertiaryText)
 

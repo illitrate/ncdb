@@ -17,6 +17,7 @@ struct ExportPreviewView: View {
     @State private var selectedFile: URL?
     @State private var fileList: [URL] = []
     @State private var isLoadingFiles = true
+    @State private var showingFullscreenBrowser = false
 
     var body: some View {
         NavigationStack {
@@ -68,7 +69,7 @@ struct ExportPreviewView: View {
                             Button {
                                 openInBrowser()
                             } label: {
-                                Label("Open in Safari", systemImage: "safari")
+                                Label("View full screen", systemImage: "safari")
                             }
                         }
                     } label: {
@@ -78,6 +79,11 @@ struct ExportPreviewView: View {
             }
             .task {
                 await loadFileList()
+            }
+            .fullScreenCover(isPresented: $showingFullscreenBrowser) {
+                if let fileURL = selectedFile {
+                    FullscreenBrowserView(url: fileURL)
+                }
             }
         }
     }
@@ -323,8 +329,8 @@ struct ExportPreviewView: View {
     }
 
     private func openInBrowser() {
-        guard let selectedFile = selectedFile else { return }
-        UIApplication.shared.open(selectedFile)
+        guard selectedFile != nil else { return }
+        showingFullscreenBrowser = true
     }
 }
 
@@ -400,6 +406,29 @@ struct ImageFileView: View {
                 Text("Failed to load image")
                     .foregroundStyle(Color.secondaryText)
             }
+        }
+    }
+}
+
+// MARK: - Fullscreen Browser View
+
+struct FullscreenBrowserView: View {
+    @Environment(\.dismiss) private var dismiss
+    let url: URL
+
+    var body: some View {
+        NavigationStack {
+            WebView(url: url)
+                .ignoresSafeArea()
+                .navigationTitle("Website Preview")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Done") {
+                            dismiss()
+                        }
+                    }
+                }
         }
     }
 }

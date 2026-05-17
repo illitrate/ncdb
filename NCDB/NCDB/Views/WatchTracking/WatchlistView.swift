@@ -19,9 +19,28 @@ struct WatchlistView: View {
     }
 
     private var watchlist: [Production] {
-        // Could be enhanced with a dedicated "watchlist" flag
-        // For now, showing all unwatched movies
-        unwatchedProductions
+        // Apply content filtering to unwatched movies
+        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
+        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
+
+        return unwatchedProductions.filter { production in
+            // If manually included, always show
+            if production.manuallyIncluded {
+                return true
+            }
+
+            // Apply non-acting filter
+            if hideNonActing && production.isNonActingAppearance {
+                return false
+            }
+
+            // Apply documentary filter
+            if hideDocumentaries && production.productionType == .documentary {
+                return false
+            }
+
+            return true
+        }
     }
 
     var body: some View {

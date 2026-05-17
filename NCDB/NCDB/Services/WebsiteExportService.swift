@@ -31,10 +31,22 @@ final class WebsiteExportService {
         // Create temporary directory for website
         let websiteDir = try createWebsiteDirectory()
 
+        // Create assets directory first
+        try createAssetsDirectory(at: websiteDir)
+
+        // Download and save poster images if requested
+        if includeImages {
+            try await savePosterImages(
+                for: productions.filter { $0.watched },
+                to: websiteDir
+            )
+        }
+
         // Prepare data for template
         let templateData = prepareTemplateData(
             productions: productions,
-            userName: userName
+            userName: userName,
+            includeImages: includeImages
         )
 
         // Generate HTML
@@ -45,19 +57,8 @@ final class WebsiteExportService {
         let indexPath = websiteDir.appendingPathComponent("index.html")
         try html.write(to: indexPath, atomically: true, encoding: .utf8)
 
-        // Download and save poster images if requested
-        if includeImages {
-            try await downloadPosters(
-                for: productions.filter { $0.watched },
-                to: websiteDir
-            )
-        }
-
         // Create CSS file (already embedded, but keep separate copy)
         try createStylesheet(at: websiteDir)
-
-        // Create assets directory
-        try createAssetsDirectory(at: websiteDir)
 
         Logger.shared.info("Website generated at: \(websiteDir.path)", category: .general)
 
@@ -68,7 +69,8 @@ final class WebsiteExportService {
 
     private func prepareTemplateData(
         productions: [Production],
-        userName: String
+        userName: String,
+        includeImages: Bool
     ) -> [String: Any] {
         let watchedProductions = productions.filter { $0.watched }
         let rankedProductions = productions
@@ -83,21 +85,35 @@ final class WebsiteExportService {
 
         // Prepare watched movies data
         let watchedMoviesData: [[String: Any]] = watchedProductions.map { movie in
-            [
+            let posterURL: String
+            if includeImages, movie.posterPath != nil {
+                posterURL = "assets/images/\(movie.id.uuidString).jpg"
+            } else {
+                posterURL = movie.posterPath.flatMap { "https://image.tmdb.org/t/p/w342\($0)" } ?? ""
+            }
+
+            return [
                 "title": movie.title,
                 "year": movie.releaseYear,
-                "posterURL": movie.posterPath.flatMap { "https://image.tmdb.org/t/p/w342\($0)" } ?? "",
+                "posterURL": posterURL,
                 "rating": movie.userRating.map { String(format: "%.1f", $0) } ?? ""
             ]
         }
 
         // Prepare ranked movies data
         let rankedMoviesData: [[String: Any]] = rankedProductions.prefix(10).map { movie in
-            [
+            let posterURL: String
+            if includeImages, movie.posterPath != nil {
+                posterURL = "assets/images/\(movie.id.uuidString).jpg"
+            } else {
+                posterURL = movie.posterPath.flatMap { "https://image.tmdb.org/t/p/w342\($0)" } ?? ""
+            }
+
+            return [
                 "rank": movie.rankingPosition ?? 0,
                 "title": movie.title,
                 "year": movie.releaseYear,
-                "posterURL": movie.posterPath.flatMap { "https://image.tmdb.org/t/p/w342\($0)" } ?? "",
+                "posterURL": posterURL,
                 "rating": movie.userRating.map { String(format: "%.1f", $0) } ?? ""
             ]
         }
@@ -149,24 +165,59 @@ final class WebsiteExportService {
         // Create images subdirectory
         let imagesDir = assetsDir.appendingPathComponent("images")
         try fileManager.createDirectory(at: imagesDir, withIntermediateDirectories: true)
-    }
 
-    private func downloadPosters(for productions: [Production], to directory: URL) async throws {
-        let imagesDir = directory.appendingPathComponent("assets/images")
-
-        for production in productions.prefix(20) { // Limit to first 20 for performance
-            guard let posterPath = production.posterPath else { continue }
-            let imageURL = URL(string: "https://image.tmdb.org/t/p/w342\(posterPath)")!
-
-            do {
-                let (data, _) = try await URLSession.shared.data(from: imageURL)
-                let filename = "\(production.id.uuidString).jpg"
-                let filePath = imagesDir.appendingPathComponent(filename)
-                try data.write(to: filePath)
-            } catch {
-                Logger.shared.warning("Failed to download poster for \(production.title): \(error)", category: .general)
+        // Copy app icon (resized to 256x256)
+        if let appIcon = UIImage(named: "AppIcon") {
+            let resizedIcon = resizeImage(appIcon, to: CGSize(width: 256, height: 256))
+            let iconPath = assetsDir.appendingPathComponent("app-icon.png")
+            if let pngData = resizedIcon.pngData() {
+                try pngData.write(to: iconPath)
             }
         }
+    }
+
+    private func resizeImage(_ image: UIImage, to size: CGSize) -> UIImage {
+        UIGraphicsBeginImageContextWithOptions(size, false, 1.0)
+        image.draw(in: CGRect(origin: .zero, size: size))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
+        UIGraphicsEndImageContext()
+        return resizedImage
+    }
+
+    private func savePosterImages(for productions: [Production], to directory: URL) async throws {
+        let imagesDir = directory.appendingPathComponent("assets/images")
+
+        for production in productions {
+            guard let posterPath = production.posterPath else { continue }
+            let imageURL = URL(string: "\(TMDbConstants.imageBaseURL)/w500\(posterPath)")!
+
+            // Try to get from cache first
+            if let cachedImage = await ImageCacheManager.shared.imageFromDisk(for: imageURL) {
+                // Resize to 342px width (standard web size)
+                let resizedImage = resizeImageProportionally(cachedImage, maxWidth: 342)
+                let filename = "\(production.id.uuidString).jpg"
+                let filePath = imagesDir.appendingPathComponent(filename)
+
+                if let jpegData = resizedImage.jpegData(compressionQuality: 0.85) {
+                    try jpegData.write(to: filePath)
+                }
+            } else {
+                Logger.shared.warning("No cached poster for \(production.title)", category: .general)
+            }
+        }
+    }
+
+    private func resizeImageProportionally(_ image: UIImage, maxWidth: CGFloat) -> UIImage {
+        let aspectRatio = image.size.height / image.size.width
+        let newWidth = min(image.size.width, maxWidth)
+        let newHeight = newWidth * aspectRatio
+        let newSize = CGSize(width: newWidth, height: newHeight)
+
+        UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
+        image.draw(in: CGRect(origin: .zero, size: newSize))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext() ?? image
+        UIGraphicsEndImageContext()
+        return resizedImage
     }
 
     private func formatRuntime(_ minutes: Int) -> String {

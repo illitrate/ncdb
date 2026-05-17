@@ -155,24 +155,24 @@ struct MovieDetailView: View {
                                     .font(.caption)
                                     .foregroundStyle(.green)
                             }
+Spacer(minLength: 0)
+                            // Rating
+                            VStack(alignment: .leading, spacing: Spacing.xs) {
+//                                Text("Your Rating")
+//                                    .font(.headline)
+//                                    .foregroundStyle(Color.primaryText)
+
+                                StarRatingView(
+                                    rating: viewModel.editedRating,
+                                    isInteractive: true,
+                                    onRatingChanged: { newRating in
+                                        viewModel.editedRating = newRating
+                                        viewModel.saveRating()
+                                    }
+                                )
+                            }
                         }
                         Spacer()
-                    }
-
-                    // Rating
-                    VStack(alignment: .leading, spacing: Spacing.xs) {
-                        Text("Your Rating")
-                            .font(.headline)
-                            .foregroundStyle(Color.primaryText)
-
-                        StarRatingView(
-                            rating: viewModel.editedRating,
-                            isInteractive: true,
-                            onRatingChanged: { newRating in
-                                viewModel.editedRating = newRating
-                                viewModel.saveRating()
-                            }
-                        )
                     }
 
                     // Review Section (only show if review exists or editing)

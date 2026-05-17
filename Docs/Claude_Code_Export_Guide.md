@@ -25,7 +25,49 @@ Claude Code works best when:
 Create this structure in a location accessible to both your terminal (for Claude Code) and Xcode:
 
 ```
- 
+~/NCDB-Design-Docs/
+├─ 01-Overview/
+│  ├─ ProjectBrief.md
+│  └─ DesignPhilosophy.md
+├─ 02-DataModels/
+│  ├─ CoreModels.swift
+│  ├─ SupportingModels.swift
+│  └─ ModelRelationships.md
+├─ 03-Services/
+│  ├─ TMDbService.swift
+│  ├─ CacheManager.swift
+│  ├─ NewsScraperService.swift
+│  ├─ AchievementManager.swift
+│  └─ ExportService.swift
+├─ 04-ViewModels/
+│  ├─ HomeViewModel.swift
+│  ├─ MovieListViewModel.swift
+│  ├─ MovieDetailViewModel.swift
+│  ├─ RankingViewModel.swift
+│  └─ StatsViewModel.swift
+├─ 05-Views/
+│  ├─ ViewArchitecture.md
+│  ├─ LiquidGlassComponents.swift
+│  └─ CustomComponents.swift
+├─ 06-Features/
+│  ├─ OnboardingFlow.md
+│  ├─ RankingSystem.md
+│  ├─ WidgetSpecifications.md
+│  ├─ AchievementsSystem.md
+│  └─ SocialSharing.md
+├─ 07-DesignSystem/
+│  ├─ ColorPalette.swift
+│  ├─ Typography.swift
+│  ├─ LiquidGlassAesthetic.md
+│  └─ AnimationGuidelines.md
+├─ 08-Integration/
+│  ├─ TMDbIntegration.md
+│  ├─ WebsiteExport.md
+│  └─ FTPConfiguration.md
+├─ 09-Testing/
+│  ├─ TestingStrategy.md
+│  └─ TestScenarios.md
+└─ README.md
 ```
 
 ---
@@ -838,7 +880,7 @@ import SwiftUI
 
 extension Color {
     // MARK: - Primary Colors
-//    static let cageGold = Color("CageGold") // #FFD700
+    static let cageGold = Color("CageGold") // #FFD700
     
     // MARK: - Backgrounds
     static let primaryBackground = Color("PrimaryBackground") // Deep black

@@ -15,6 +15,9 @@ struct SettingsView: View {
     @State private var showingResetAppConfirmation = false
     @State private var showAbout = false
     @State private var showingFilteredItems = false
+    @State private var showingExportOptions = false
+    @State private var showingWebsiteExport = false
+    @State private var showingFTPConfig = false
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some View {
@@ -108,6 +111,49 @@ struct SettingsView: View {
                     .disabled(viewModel.isClearingCache)
                 }
 
+                // Export & Sharing
+                Section {
+                    Button {
+                        showingExportOptions = true
+                    } label: {
+                        HStack {
+                            Label("Export Data", systemImage: "square.and.arrow.up")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiaryText)
+                        }
+                    }
+
+                    Button {
+                        showingWebsiteExport = true
+                    } label: {
+                        HStack {
+                            Label("Export as Website", systemImage: "globe")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiaryText)
+                        }
+                    }
+
+                    Button {
+                        showingFTPConfig = true
+                    } label: {
+                        HStack {
+                            Label("FTP Settings", systemImage: "server.rack")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiaryText)
+                        }
+                    }
+                } header: {
+                    Text("Export & Sharing")
+                } footer: {
+                    Text("Export your collection as JSON, CSV, or HTML. Generate a website and optionally upload it via FTP.")
+                }
+
                 // Data Management
                 Section("Data Management") {
                     Button(role: .destructive) {
@@ -162,6 +208,15 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingFilteredItems) {
                 FilteredItemsView()
+            }
+            .sheet(isPresented: $showingExportOptions) {
+                ExportDataView()
+            }
+            .sheet(isPresented: $showingWebsiteExport) {
+                WebsiteExportView()
+            }
+            .sheet(isPresented: $showingFTPConfig) {
+                FTPConfigView()
             }
             .task {
                 // Refresh API key status and time display when view appears

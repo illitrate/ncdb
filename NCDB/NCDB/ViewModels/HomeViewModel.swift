@@ -55,8 +55,34 @@ final class HomeViewModel {
         // Load recent activity
         loadRecentActivity(from: productions)
 
+        // Update widget data
+        await updateWidgets(productions: productions)
+
         isLoading = false
         Logger.shared.debug("Dashboard data loaded successfully", category: .ui)
+    }
+
+    // MARK: - Widget Updates
+
+    /// Update widget data for home screen widgets
+    private func updateWidgets(productions: [Production]) async {
+        // Fetch achievements from database
+        guard let context = dataManager.modelContext else { return }
+
+        do {
+            let achievementDescriptor = FetchDescriptor<Achievement>()
+            let achievements = try context.fetch(achievementDescriptor)
+
+            // Update widget data service
+            WidgetDataService.shared.updateWidgetData(
+                productions: productions,
+                achievements: achievements
+            )
+
+            Logger.shared.debug("Widget data updated", category: .ui)
+        } catch {
+            Logger.shared.error("Failed to update widget data: \(error)", category: .ui)
+        }
     }
 
     // MARK: - Stats Calculation

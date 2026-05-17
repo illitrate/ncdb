@@ -148,6 +148,14 @@ final class TemplateEngine {
                     background: linear-gradient(135deg, var(--bg-card), var(--bg-dark));
                 }
 
+                .app-icon {
+                    width: 120px;
+                    height: 120px;
+                    border-radius: 27px;
+                    margin-bottom: 20px;
+                    box-shadow: 0 8px 32px rgba(212, 175, 55, 0.3);
+                }
+
                 h1 {
                     font-size: 3em;
                     margin-bottom: 10px;
@@ -277,7 +285,8 @@ final class TemplateEngine {
         </head>
         <body>
             <header>
-                <h1>🎬 {{userName}}'s Nicolas Cage Collection</h1>
+                <img src="assets/app-icon.png" alt="NCDB Icon" class="app-icon">
+                <h1>{{userName}}'s Nicolas Cage Collection</h1>
                 <p class="subtitle">A dedicated tracker of the One True God's filmography</p>
             </header>
 

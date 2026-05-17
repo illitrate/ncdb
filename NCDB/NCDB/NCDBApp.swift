@@ -72,6 +72,7 @@ struct NCDBApp: App {
                 configureAppearance()
                 configureDataManager()
                 configureAchievementTracking()
+                configureNewsRefresh()
             }
         }
         .modelContainer(sharedModelContainer)
@@ -94,6 +95,32 @@ struct NCDBApp: App {
             await AchievementProgressTracker.shared.forceCheck()
 
             Logger.shared.info("Achievement tracking configured", category: .general)
+        }
+    }
+
+    // MARK: - News Refresh Configuration
+
+    private func configureNewsRefresh() {
+        Task { @MainActor in
+            let cacheManager = NewsCacheManager.shared
+            let modelContext = sharedModelContainer.mainContext
+
+            // Check if we need to fetch news
+            let descriptor = FetchDescriptor<NewsArticle>()
+            let existingArticles = try? modelContext.fetch(descriptor)
+            let hasNoArticles = existingArticles?.isEmpty ?? true
+
+            if hasNoArticles || cacheManager.shouldRefreshNews {
+                Logger.shared.info("Fetching news on app launch...", category: .general)
+
+                let newsService = NewsScraperService.shared
+                let _ = await newsService.fetchAllNews(modelContext: modelContext)
+                cacheManager.recordFetch()
+
+                Logger.shared.info("News fetch completed", category: .general)
+            } else {
+                Logger.shared.info("News cache is fresh, skipping fetch", category: .general)
+            }
         }
     }
 

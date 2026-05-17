@@ -50,6 +50,31 @@ struct HomeView: View {
         }
     }
 
+    /// Apply content filtering to watchlist (unwatched productions)
+    private var filteredWatchlist: [Production] {
+        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
+        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
+
+        return unwatchedProductions.filter { production in
+            // If manually included, always show
+            if production.manuallyIncluded {
+                return true
+            }
+
+            // Apply non-acting filter
+            if hideNonActing && production.isNonActingAppearance {
+                return false
+            }
+
+            // Apply documentary filter
+            if hideDocumentaries && production.productionType == .documentary {
+                return false
+            }
+
+            return true
+        }
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -150,7 +175,7 @@ struct HomeView: View {
                     }
 
                     // Watchlist Preview
-                    if !unwatchedProductions.isEmpty {
+                    if !filteredWatchlist.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
                             HStack {
                                 SectionHeader(title: "Watchlist")
@@ -163,7 +188,7 @@ struct HomeView: View {
 
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: Spacing.sm) {
-                                    ForEach(unwatchedProductions.prefix(10)) { production in
+                                    ForEach(filteredWatchlist.prefix(10)) { production in
                                         NavigationLink(value: production) {
                                             MoviePosterCard(movie: production, size: .medium)
                                         }
