@@ -87,6 +87,7 @@
 				Services/ImageCacheManager.swift,
 				Services/TMDbService.swift,
 				Services/WidgetDataService.swift,
+				Utilities/ContentFilter.swift,
 				Utilities/Logger.swift,
 			);
 			target = CE1436A62EFD64BC005567AE /* NCDBWidgetExtensionExtension */;

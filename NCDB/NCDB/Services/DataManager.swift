@@ -112,33 +112,9 @@ final class DataManager {
         return try context.fetch(descriptor)
     }
 
-    /// Fetch productions with user filter preferences applied
+    /// Fetch productions with the user's content filter applied
     func fetchFilteredProductions() throws -> [Production] {
-        let allProductions = try fetchAllProductions()
-
-        // Get filter preferences from UserDefaults
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        // Apply filters
-        return allProductions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        try fetchAllProductions().contentFiltered
     }
 
     /// Fetch productions with predicate

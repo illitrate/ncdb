@@ -18,27 +18,7 @@ struct RankingsView: View {
 
     /// Apply content filtering to productions
     private var filteredProductions: [Production] {
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        return productions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        productions.contentFiltered
     }
 
     enum ViewMode {

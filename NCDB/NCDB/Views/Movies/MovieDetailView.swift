@@ -15,6 +15,8 @@ struct MovieDetailView: View {
     @State private var showFullScreenPoster = false
     @State private var isEditingReview = false
     @State private var isEditingQuotes = false
+    @State private var showWatchLogger = false
+    @State private var showTagPicker = false
 
     init(production: Production) {
         self.production = production
@@ -87,6 +89,21 @@ struct MovieDetailView: View {
                                         )
                                     }
 
+                                    // Full watch event: date, location, who with,
+                                    // mood, notes. WatchEventLogger existed but
+                                    // had no entry point anywhere in the app.
+                                    Button {
+                                        showWatchLogger = true
+                                    } label: {
+                                        Label("Log a Watch…", systemImage: "square.and.pencil")
+                                    }
+
+                                    Button {
+                                        showTagPicker = true
+                                    } label: {
+                                        Label("Tags…", systemImage: "tag")
+                                    }
+
                                     if production.watched {
                                         Button(role: .destructive) {
                                             viewModel.unmarkAsWatched()
@@ -154,6 +171,11 @@ struct MovieDetailView: View {
                             Text(viewModel.formattedGenres)
                                 .font(.caption)
                                 .foregroundStyle(Color.tertiaryText)
+
+                            if !production.tags.isEmpty {
+                                TagChipRow(tags: production.tags.sorted { $0.name < $1.name })
+                                    .padding(.top, Spacing.xxs)
+                            }
 
                             if viewModel.hasBeenWatched {
                                 Label(viewModel.formattedWatchCount, systemImage: "eye.fill")
@@ -349,6 +371,14 @@ Spacer(minLength: 0)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showWatchLogger) {
+            WatchEventLogger(production: production) {
+                showWatchLogger = false
+            }
+        }
+        .sheet(isPresented: $showTagPicker) {
+            TagPickerView(production: production)
         }
         .fullScreenCover(isPresented: $showFullScreenPoster) {
             if let posterPath = production.posterPath {

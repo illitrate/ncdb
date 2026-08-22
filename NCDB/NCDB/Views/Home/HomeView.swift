@@ -14,6 +14,8 @@ enum HomeNavigationDestination: Hashable {
     case achievements
     case news
     case stats
+    case watchCalendar
+    case watchStats
 }
 
 /// Home/Dashboard view
@@ -27,52 +29,12 @@ struct HomeView: View {
 
     /// Apply content filtering to productions
     private var filteredProductions: [Production] {
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        return productions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        productions.contentFiltered
     }
 
     /// Apply content filtering to watchlist (unwatched productions)
     private var filteredWatchlist: [Production] {
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        return unwatchedProductions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        unwatchedProductions.contentFiltered
     }
 
     var body: some View {
@@ -174,6 +136,35 @@ struct HomeView: View {
                         }
                     }
 
+                    // Viewing Diary
+                    //
+                    // WatchCalendarView and WatchStatsView were written, compiled
+                    // and unreachable — nothing in the app linked to either.
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SectionHeader(title: "Viewing Diary")
+
+                        HStack(spacing: Spacing.md) {
+                            NavigationLink(value: HomeNavigationDestination.watchCalendar) {
+                                DiaryTile(
+                                    title: "Calendar",
+                                    subtitle: "Your year in viewings",
+                                    icon: "calendar",
+                                    color: .cageGold
+                                )
+                            }
+
+                            NavigationLink(value: HomeNavigationDestination.watchStats) {
+                                DiaryTile(
+                                    title: "Habits",
+                                    subtitle: "Streaks and totals",
+                                    icon: "flame.fill",
+                                    color: .orange
+                                )
+                            }
+                        }
+                        .padding(.horizontal, Spacing.md)
+                    }
+
                     // Watchlist Preview
                     if !filteredWatchlist.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -256,6 +247,14 @@ struct HomeView: View {
                     NewsView()
                 case .stats:
                     StatsView()
+                case .watchCalendar:
+                    WatchCalendarView()
+                        .navigationTitle("Watch Calendar")
+                        .navigationBarTitleDisplayMode(.inline)
+                case .watchStats:
+                    WatchStatsView()
+                        .navigationTitle("Viewing Habits")
+                        .navigationBarTitleDisplayMode(.inline)
                 }
             }
             .navigationDestination(for: Production.self) { production in
@@ -295,5 +294,35 @@ struct HomeView: View {
 
     private var recentNews: [NewsArticle] {
         Array(newsArticles.prefix(3))
+    }
+}
+
+// MARK: - Diary Tile
+
+/// Entry point tile for the viewing diary screens.
+private struct DiaryTile: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.primaryText)
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(Color.secondaryText)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.md)
+        .glassEffect(.regular, in: .rect(cornerRadius: Sizes.cornerRadiusMedium))
     }
 }
