@@ -46,6 +46,9 @@ struct NCDBApp: App {
                 rootView
                     .modelContainer(container)
                     .task { configure(with: container) }
+                    .onOpenURL { url in
+                        AppRouter.shared.handle(url)
+                    }
 
             case .failed(let error):
                 DatabaseRecoveryView(error: error) {
@@ -138,15 +141,23 @@ struct NCDBApp: App {
 // MARK: - Main Tab View
 
 struct MainTabView: View {
-    @State private var selectedTab: AppTab = .home
     @State private var showToast = false
 
     private var events: AppEvents { AppEvents.shared }
+    private var router: AppRouter { AppRouter.shared }
+
+    /// Selection lives on the router so deep links and intents can change tabs.
+    private var selectedTab: Binding<AppTab> {
+        Binding(
+            get: { AppRouter.shared.selectedTab },
+            set: { AppRouter.shared.selectedTab = $0 }
+        )
+    }
 
     var body: some View {
         // Value-based Tab API: the tab bar can minimize on scroll and adapt to a
         // sidebar on iPad, neither of which the old .tabItem/.tag form supports.
-        TabView(selection: $selectedTab) {
+        TabView(selection: selectedTab) {
             Tab("Home", systemImage: SFSymbols.home, value: AppTab.home) {
                 HomeView()
             }

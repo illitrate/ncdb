@@ -26,6 +26,7 @@ struct HomeView: View {
     @Query(sort: \NewsArticle.publishedDate, order: .reverse) private var newsArticles: [NewsArticle]
     @State private var viewModel = HomeViewModel()
     @State private var showAbout = false
+    @State private var path = NavigationPath()
 
     /// Apply content filtering to productions
     private var filteredProductions: [Production] {
@@ -38,7 +39,7 @@ struct HomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: Spacing.lg) {
                     // Greeting
@@ -236,6 +237,11 @@ struct HomeView: View {
                         showAbout = true
                     }
                 }
+            }
+            .onChange(of: AppRouter.shared.pendingHomeDestination) { _, destination in
+                guard let destination else { return }
+                path.append(destination)
+                AppRouter.shared.pendingHomeDestination = nil
             }
             .navigationDestination(for: HomeNavigationDestination.self) { destination in
                 switch destination {

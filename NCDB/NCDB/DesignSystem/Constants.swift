@@ -6,7 +6,7 @@ import SwiftUI
 
 // MARK: - App Identity
 
-enum AppConstants {
+nonisolated enum AppConstants {
     static let appName = "Nicolas Cage Database"
     static let shortName = "NCDB"
     static let appVersion = "1.0.0"

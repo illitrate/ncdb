@@ -12,45 +12,55 @@ struct RankingsWidget: Widget {
     let kind: String = "RankingsWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: RankingsTimelineProvider()) { entry in
+        // AppIntentConfiguration rather than StaticConfiguration: the user can
+        // long-press and choose how much of their ranking to show.
+        AppIntentConfiguration(
+            kind: kind,
+            intent: RankingsWidgetConfiguration.self,
+            provider: RankingsTimelineProvider()
+        ) { entry in
             RankingsWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Top Rankings")
         .description("Your top-ranked Nicolas Cage movies")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies([
+            .systemSmall, .systemMedium, .systemLarge,
+            .accessoryRectangular, .accessoryInline
+        ])
     }
 }
 
 // MARK: - Timeline Provider
 
-struct RankingsTimelineProvider: TimelineProvider {
+struct RankingsTimelineProvider: AppIntentTimelineProvider {
+
     func placeholder(in context: Context) -> RankingsEntry {
-        RankingsEntry(date: Date(), data: RankingsEntry.placeholderData)
+        RankingsEntry(
+            date: Date(),
+            data: RankingsEntry.placeholderData,
+            configuration: RankingsWidgetConfiguration()
+        )
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (RankingsEntry) -> Void) {
-        let entry: RankingsEntry
-        if let data = WidgetDataService.loadWidgetData() {
-            entry = RankingsEntry(date: Date(), data: data)
-        } else {
-            entry = RankingsEntry(date: Date(), data: RankingsEntry.placeholderData)
-        }
-        completion(entry)
+    func snapshot(for configuration: RankingsWidgetConfiguration, in context: Context) async -> RankingsEntry {
+        RankingsEntry(
+            date: Date(),
+            data: WidgetDataService.loadWidgetData() ?? RankingsEntry.placeholderData,
+            configuration: configuration
+        )
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<RankingsEntry>) -> Void) {
-        let currentDate = Date()
-        let entry: RankingsEntry
+    func timeline(for configuration: RankingsWidgetConfiguration, in context: Context) async -> Timeline<RankingsEntry> {
+        let entry = RankingsEntry(
+            date: Date(),
+            data: WidgetDataService.loadWidgetData() ?? RankingsEntry.placeholderData,
+            configuration: configuration
+        )
 
-        if let data = WidgetDataService.loadWidgetData() {
-            entry = RankingsEntry(date: currentDate, data: data)
-        } else {
-            entry = RankingsEntry(date: currentDate, data: RankingsEntry.placeholderData)
-        }
-
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: currentDate)!
-        let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
-        completion(timeline)
+        // The app reloads timelines whenever the data actually changes, so this
+        // is only a backstop.
+        let nextUpdate = Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date()
+        return Timeline(entries: [entry], policy: .after(nextUpdate))
     }
 }
 
@@ -59,6 +69,12 @@ struct RankingsTimelineProvider: TimelineProvider {
 struct RankingsEntry: TimelineEntry {
     let date: Date
     let data: WidgetDataService.WidgetData
+    let configuration: RankingsWidgetConfiguration
+
+    /// Films to show, honouring the user's chosen style.
+    var films: [WidgetDataService.WidgetData.RankedMovie] {
+        Array(data.topRankedMovies.prefix(configuration.style.count))
+    }
 
     static var placeholderData: WidgetDataService.WidgetData {
         WidgetDataService.WidgetData(
@@ -67,9 +83,13 @@ struct RankingsEntry: TimelineEntry {
             completionPercentage: 35.0,
             averageRating: 4.2,
             topRankedMovies: [
-                .init(title: "Face/Off", year: 1997, rank: 1, posterPath: nil, rating: 5.0),
-                .init(title: "The Unbearable Weight of Massive Talent", year: 2022, rank: 2, posterPath: nil, rating: 4.8),
-                .init(title: "Con Air", year: 1997, rank: 3, posterPath: nil, rating: 4.7)
+                .init(id: UUID(), title: "Face/Off", year: 1997, rank: 1, posterPath: nil, rating: 5.0),
+                .init(id: UUID(), title: "The Unbearable Weight of Massive Talent", year: 2022, rank: 2, posterPath: nil, rating: 4.8),
+                .init(id: UUID(), title: "Con Air", year: 1997, rank: 3, posterPath: nil, rating: 4.7)
+            ],
+            upNext: [
+                .init(id: UUID(), title: "Pig", year: 2021, rank: 0, posterPath: nil, rating: nil),
+                .init(id: UUID(), title: "Mandy", year: 2018, rank: 0, posterPath: nil, rating: nil)
             ],
             recentAchievements: [],
             lastUpdated: Date()
@@ -111,8 +131,10 @@ struct RankingsWidgetEntryView: View {
             }
         }
         .padding(family == .systemSmall ? 14 : 16)
+        .widgetURL(NCDBDeepLink.rankings)
         .containerBackground(for: .widget) {
-            if let posterPath = entry.data.topRankedMovies.first?.posterPath {
+            if entry.configuration.showPosters,
+               let posterPath = entry.films.first?.posterPath {
                 PosterBackgroundView(posterPath: posterPath)
             } else {
                 GradientBackgroundView()
@@ -122,7 +144,7 @@ struct RankingsWidgetEntryView: View {
 
     private var smallLayout: some View {
         Group {
-            if let topMovie = entry.data.topRankedMovies.first {
+            if let topMovie = entry.films.first {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top, spacing: 4) {
                         Text("#1")
@@ -159,11 +181,11 @@ struct RankingsWidgetEntryView: View {
 
     private var mediumLayout: some View {
         VStack(spacing: 6) {
-            ForEach(entry.data.topRankedMovies.prefix(3), id: \.title) { movie in
+            ForEach(entry.films, id: \.title) { movie in
                 RankingRow(movie: movie)
             }
 
-            if entry.data.topRankedMovies.isEmpty {
+            if entry.films.isEmpty {
                 Text("No rankings yet")
                     .font(.caption)
                     .foregroundStyle(.white.opacity(0.7))
@@ -174,11 +196,11 @@ struct RankingsWidgetEntryView: View {
 
     private var largeLayout: some View {
         VStack(spacing: 8) {
-            ForEach(entry.data.topRankedMovies.prefix(3), id: \.title) { movie in
+            ForEach(entry.films, id: \.title) { movie in
                 LargeRankingCard(movie: movie)
             }
 
-            if entry.data.topRankedMovies.isEmpty {
+            if entry.films.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "trophy.fill")
                         .font(.largeTitle)
@@ -326,17 +348,17 @@ struct PosterPlaceholder: View {
 #Preview(as: .systemSmall) {
     RankingsWidget()
 } timeline: {
-    RankingsEntry(date: .now, data: RankingsEntry.placeholderData)
+    RankingsEntry(date: .now, data: RankingsEntry.placeholderData, configuration: RankingsWidgetConfiguration())
 }
 
 #Preview(as: .systemMedium) {
     RankingsWidget()
 } timeline: {
-    RankingsEntry(date: .now, data: RankingsEntry.placeholderData)
+    RankingsEntry(date: .now, data: RankingsEntry.placeholderData, configuration: RankingsWidgetConfiguration())
 }
 
 #Preview(as: .systemLarge) {
     RankingsWidget()
 } timeline: {
-    RankingsEntry(date: .now, data: RankingsEntry.placeholderData)
+    RankingsEntry(date: .now, data: RankingsEntry.placeholderData, configuration: RankingsWidgetConfiguration())
 }

@@ -43,10 +43,25 @@ final class AppEvents {
 
     func productionWatchStateChanged() {
         watchStateVersion &+= 1
+        scheduleWidgetRefresh()
     }
 
     func productionRatingChanged() {
         ratingVersion &+= 1
+        scheduleWidgetRefresh()
+    }
+
+    /// Coalesced widget refresh — a burst of edits shouldn't rebuild the
+    /// snapshot once per keystroke.
+    private var widgetRefreshTask: Task<Void, Never>?
+
+    func scheduleWidgetRefresh() {
+        widgetRefreshTask?.cancel()
+        widgetRefreshTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled else { return }
+            await WidgetDataService.shared.refreshFromStore()
+        }
     }
 
     /// Bumped when the user exports their data.
@@ -76,6 +91,7 @@ final class AppEvents {
     func requestRankingAdjustment(for production: Production) {
         rankingToken &+= 1
         pendingRankingAdjustment = (production, rankingToken)
+        scheduleWidgetRefresh()
     }
 
     /// Take the pending adjustment, if any, clearing it.

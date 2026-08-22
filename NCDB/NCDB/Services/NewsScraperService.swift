@@ -215,7 +215,10 @@ struct ParsedArticle: Sendable, Hashable {
 /// A parsed article with its relevance score and inferred category.
 struct ScoredArticle: Sendable {
     let parsed: ParsedArticle
+    /// Ordering score: content relevance plus a recency nudge.
     let score: Int
+    /// Content relevance alone — this is what decides whether to keep the article.
+    let keywordScore: Int
     let category: ArticleCategory
 
     /// Raw score mapped onto the 0–1 range `NewsArticle.relevanceScore` documents.

@@ -74,7 +74,7 @@ final class HomeViewModel {
             let achievements = try context.fetch(achievementDescriptor)
 
             // Update widget data service
-            WidgetDataService.shared.updateWidgetData(
+            await WidgetDataService.shared.updateWidgetData(
                 productions: productions,
                 achievements: achievements
             )

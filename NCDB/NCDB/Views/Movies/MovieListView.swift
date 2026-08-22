@@ -15,6 +15,7 @@ struct MovieListView: View {
     @State private var showingFilters = false
     @State private var showAbout = false
     @State private var viewMode: ViewMode = .grid
+    @State private var path = NavigationPath()
 
     enum ViewMode {
         case grid, list
@@ -25,12 +26,18 @@ struct MovieListView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             contentView
                 .background(Color.primaryBackground)
                 .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
+            }
+            .onChange(of: AppRouter.shared.pendingFilm) { _, filmID in
+                guard let filmID,
+                      let production = allProductions.first(where: { $0.id == filmID }) else { return }
+                path.append(production)
+                AppRouter.shared.pendingFilm = nil
             }
             .searchable(text: $viewModel.searchQuery, prompt: "Search movies")
             // Collapses the search field to a button until it's needed, so the

@@ -53,10 +53,14 @@ final class NewsFilterService {
                 ScoredArticle(
                     parsed: article,
                     score: relevanceScore(title: article.title, summary: article.summary, publishedDate: article.publishedDate),
+                    keywordScore: keywordScore(title: article.title, summary: article.summary),
                     category: category(title: article.title, summary: article.summary)
                 )
             }
-            .filter { $0.score >= 1 }
+            // Relevance must come from the content. Recency only breaks ties —
+            // filtering on the combined score let any article published in the
+            // last 24 hours through on the recency bonus alone.
+            .filter { $0.keywordScore >= 1 }
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
                 return lhs.parsed.publishedDate > rhs.parsed.publishedDate
@@ -68,8 +72,11 @@ final class NewsFilterService {
         Self.scoreAndFilter(articles)
     }
 
-    /// How strongly an article is about Nicolas Cage. Higher is more relevant.
-    nonisolated static func relevanceScore(title: String, summary: String?, publishedDate: Date) -> Int {
+    /// How much of the article is actually about Nicolas Cage, from content alone.
+    ///
+    /// This is what decides whether an article is kept. It deliberately excludes
+    /// the recency bonus, which is an ordering signal, not evidence of relevance.
+    nonisolated static func keywordScore(title: String, summary: String?) -> Int {
         let content = "\(title) \(summary ?? "")".lowercased()
         var score = 0
 
@@ -88,6 +95,13 @@ final class NewsFilterService {
         if lowercasedTitle.contains("nicolas cage") || lowercasedTitle.contains("nic cage") {
             score += 2
         }
+
+        return score
+    }
+
+    /// Ordering score: relevance plus a nudge for fresh news.
+    nonisolated static func relevanceScore(title: String, summary: String?, publishedDate: Date) -> Int {
+        var score = keywordScore(title: title, summary: summary)
 
         // Fresh news outranks equally relevant older news.
         if publishedDate > Date().addingTimeInterval(-24 * 60 * 60) {
@@ -132,7 +146,7 @@ final class NewsFilterService {
     func filterRelevantArticles(_ articles: [NewsArticle]) -> [NewsArticle] {
         articles
             .map { ($0, calculateRelevanceScore($0)) }
-            .filter { $0.1 >= 1 }
+            .filter { Self.keywordScore(title: $0.0.title, summary: $0.0.summary) >= 1 }
             .sorted { lhs, rhs in
                 if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
                 return lhs.0.publishedDate > rhs.0.publishedDate

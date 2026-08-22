@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftData
 import UIKit
 import WidgetKit
 
@@ -29,10 +30,13 @@ final class WidgetDataService {
         let completionPercentage: Double
         let averageRating: Double
         let topRankedMovies: [RankedMovie]
+        let upNext: [RankedMovie]
         let recentAchievements: [Achievement]
         let lastUpdated: Date
 
         struct RankedMovie: Codable, Sendable {
+            /// Production.id, so widget buttons can act on the right film.
+            let id: UUID
             let title: String
             let year: Int
             let rank: Int
@@ -49,39 +53,33 @@ final class WidgetDataService {
 
     // MARK: - Save Widget Data
 
-    /// Update widget data and refresh all widgets
+    /// Update widget data and refresh all widgets.
+    ///
+    /// Awaits the poster copies before saving: 1.x fired them as detached tasks
+    /// inside a `map` and then reloaded timelines immediately, so the widget
+    /// reliably asked for images that didn't exist yet and fell back to the
+    /// placeholder.
     func updateWidgetData(
         productions: [Production],
         achievements: [Achievement]
-    ) {
+    ) async {
         let watchedProductions = productions.filter { $0.watched }
         let rankedProductions = productions
             .filter(\.isRanked)
             .sorted { ($0.rankingPosition ?? .max) < ($1.rankingPosition ?? .max) }
 
-        // Calculate average rating
         let ratings = watchedProductions.compactMap { $0.userRating }
         let averageRating = ratings.isEmpty ? 0.0 : ratings.reduce(0.0, +) / Double(ratings.count)
 
-        // Get top 3 ranked movies and copy their posters to shared container
-        let topRanked = rankedProductions.prefix(3).map { production in
-            // Copy poster to shared container for widget access
-            if let posterPath = production.posterPath {
-                Task {
-                    await copyPosterToSharedContainer(posterPath: posterPath)
-                }
-            }
+        let topRanked = rankedProductions.prefix(5).map(Self.snapshot)
 
-            return WidgetData.RankedMovie(
-                title: production.title,
-                year: production.releaseYear,
-                rank: production.rankingPosition ?? 0,
-                posterPath: production.posterPath,
-                rating: production.userRating
-            )
-        }
+        // Unwatched films, so the Up Next widget has something to offer.
+        let upNext = productions
+            .filter { !$0.watched }
+            .shuffled()
+            .prefix(5)
+            .map(Self.snapshot)
 
-        // Get recent achievements (last 5)
         let recentAchievements = achievements
             .sorted { $0.unlockedAt > $1.unlockedAt }
             .prefix(5)
@@ -97,12 +95,18 @@ final class WidgetDataService {
                 )
             }
 
+        // Copy every poster the widgets might want *before* announcing new data.
+        for path in (topRanked + upNext).compactMap(\.posterPath) {
+            await copyPosterToSharedContainer(posterPath: path)
+        }
+
         let widgetData = WidgetData(
             watchedCount: watchedProductions.count,
             totalCount: productions.count,
             completionPercentage: productions.isEmpty ? 0.0 : Double(watchedProductions.count) / Double(productions.count) * 100.0,
             averageRating: averageRating,
             topRankedMovies: Array(topRanked),
+            upNext: Array(upNext),
             recentAchievements: Array(recentAchievements),
             lastUpdated: Date()
         )
@@ -111,6 +115,17 @@ final class WidgetDataService {
         refreshAllWidgets()
 
         Logger.shared.info("Widget data updated: \(watchedProductions.count)/\(productions.count) watched", category: .general)
+    }
+
+    private static func snapshot(_ production: Production) -> WidgetData.RankedMovie {
+        WidgetData.RankedMovie(
+            id: production.id,
+            title: production.title,
+            year: production.releaseYear,
+            rank: production.rankingPosition ?? 0,
+            posterPath: production.posterPath,
+            rating: production.userRating
+        )
     }
 
     /// Save widget data to shared container
@@ -125,7 +140,6 @@ final class WidgetDataService {
             encoder.dateEncodingStrategy = .iso8601
             let encodedData = try encoder.encode(data)
             sharedDefaults.set(encodedData, forKey: "widgetData")
-            sharedDefaults.synchronize()
         } catch {
             Logger.shared.error("Failed to encode widget data: \(error)", category: .general)
         }
@@ -153,6 +167,26 @@ final class WidgetDataService {
     }
 
     // MARK: - Widget Refresh
+
+    /// Rebuild widget data from the store.
+    ///
+    /// F13: 1.x only refreshed from HomeViewModel, so rating a film or
+    /// reordering rankings without visiting Home left widgets showing stale
+    /// numbers. Anything that changes the library calls this now.
+    func refreshFromStore() async {
+        guard let context = DataManager.shared.modelContext else { return }
+
+        do {
+            let productions = try context.fetch(
+                FetchDescriptor<Production>(sortBy: [SortDescriptor(\.title)])
+            ).contentFiltered
+            let achievements = try context.fetch(FetchDescriptor<Achievement>())
+
+            await updateWidgetData(productions: productions, achievements: achievements)
+        } catch {
+            Logger.shared.error("Couldn't refresh widget data: \(error)", category: .general)
+        }
+    }
 
     /// Trigger refresh for all widgets
     func refreshAllWidgets() {
