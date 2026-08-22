@@ -33,6 +33,9 @@ struct MovieListView: View {
                 MovieDetailView(production: production)
             }
             .searchable(text: $viewModel.searchQuery, prompt: "Search movies")
+            // Collapses the search field to a button until it's needed, so the
+            // poster grid keeps the vertical space.
+            .searchToolbarBehavior(.minimize)
             .toolbar {
                 ToolbarItem(placement: .principal) {
                     NCDBLogoView {

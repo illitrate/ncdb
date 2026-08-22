@@ -4,6 +4,12 @@
 import SwiftUI
 
 // MARK: - Glass Card
+
+/// A frosted panel built on the system Liquid Glass effect.
+///
+/// Before 2.0 this was `.ultraThinMaterial` plus a hand-drawn white gradient
+/// stroke — the pre-iOS 26 way of approximating glass. It now uses the real
+/// thing, so it picks up the system's lensing, highlights and motion response.
 struct GlassCard<Content: View>: View {
     let content: Content
     var cornerRadius: CGFloat = 20
@@ -22,29 +28,17 @@ struct GlassCard<Content: View>: View {
     var body: some View {
         content
             .padding(padding)
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 8)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                .white.opacity(0.2),
-                                .white.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
     }
 }
 
 // MARK: - Glass Button
+
+/// A button on the system glass button styles.
+///
+/// The `style` cases map onto the native styles rather than onto hand-rolled
+/// materials and shadows: primary is prominent glass tinted Cage Gold,
+/// secondary is plain glass, destructive is glass carrying the destructive role.
 struct GlassButton: View {
     let title: String
     let icon: String?
@@ -59,24 +53,40 @@ struct GlassButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if let icon = icon {
-                    Image(systemName: icon)
-                        .font(.headline)
-                }
-                Text(title)
+        switch style {
+        case .primary:
+            button
+                .buttonStyle(.glassProminent)
+                .tint(.cageGold)
+                // Prominent glass fills with the tint, so the label needs to be
+                // dark against Cage Gold — matching GoldBadge.
+                .foregroundStyle(.black)
+        case .secondary:
+            button
+                .buttonStyle(.glass)
+                .tint(.white)
+        case .destructive:
+            Button(role: .destructive, action: action) { label }
+                .buttonStyle(.glass)
+                .tint(.red)
+        }
+    }
+
+    private var button: some View {
+        Button(action: action) { label }
+    }
+
+    private var label: some View {
+        HStack(spacing: 8) {
+            if let icon {
+                Image(systemName: icon)
                     .font(.headline)
             }
-            .foregroundStyle(style.foregroundColor)
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(style.backgroundColor)
-                    .shadow(color: style.shadowColor, radius: 8, x: 0, y: 4)
-            )
+            Text(title)
+                .font(.headline)
         }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
     }
 }
 
@@ -84,30 +94,6 @@ enum GlassButtonStyle {
     case primary
     case secondary
     case destructive
-
-    var backgroundColor: Material {
-        switch self {
-        case .primary: return .thickMaterial
-        case .secondary: return .thinMaterial
-        case .destructive: return .ultraThinMaterial
-        }
-    }
-
-    var foregroundColor: Color {
-        switch self {
-        case .primary: return .cageGold
-        case .secondary: return .white
-        case .destructive: return .red
-        }
-    }
-
-    var shadowColor: Color {
-        switch self {
-        case .primary: return Color.cageGold.opacity(0.5)
-        case .secondary: return .black.opacity(0.3)
-        case .destructive: return .red.opacity(0.4)
-        }
-    }
 }
 
 // MARK: - Glass Frame (for posters/images)
@@ -127,15 +113,8 @@ struct GlassFrame<Content: View>: View {
         content
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
             .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: cornerRadius + 4)
-                    .fill(.ultraThinMaterial)
-                    .shadow(color: .black.opacity(0.4), radius: 15, x: 0, y: 10)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius + 4)
-                    .stroke(.white.opacity(0.2), lineWidth: 1)
-            )
+            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius + 4))
+            .shadow(color: .black.opacity(0.4), radius: 15, x: 0, y: 10)
     }
 }
 
@@ -199,14 +178,7 @@ struct GlassTextField: View {
             }
         }
         .padding(Spacing.md)
-        .background(
-            RoundedRectangle(cornerRadius: Sizes.cornerRadiusMedium)
-                .fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Sizes.cornerRadiusMedium)
-                .stroke(Color.glassLight, lineWidth: 1)
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: Sizes.cornerRadiusMedium))
     }
 }
 
@@ -227,9 +199,11 @@ struct GlassTextField: View {
                 }
             }
 
-            HStack(spacing: 16) {
-                GlassButton(title: "Primary", icon: "star.fill") {}
-                GlassButton(title: "Secondary", style: .secondary) {}
+            GlassEffectContainer(spacing: 16) {
+                HStack(spacing: 16) {
+                    GlassButton(title: "Primary", icon: "star.fill") {}
+                    GlassButton(title: "Secondary", style: .secondary) {}
+                }
             }
 
             GoldBadge("Cage Gold", icon: "star.fill")

@@ -512,10 +512,7 @@ struct MovieRow: View {
                 .foregroundStyle(Color.tertiaryText)
         }
         .padding(Spacing.sm)
-        .background(
-            RoundedRectangle(cornerRadius: Sizes.cornerRadiusMedium)
-                .fill(.ultraThinMaterial)
-        )
+        .glassEffect(.regular, in: .rect(cornerRadius: Sizes.cornerRadiusMedium))
     }
 }
 

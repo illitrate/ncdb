@@ -116,7 +116,8 @@ struct RankingsView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
-                    .background(.ultraThinMaterial)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.horizontal, Spacing.md)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)

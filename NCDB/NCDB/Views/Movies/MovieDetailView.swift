@@ -24,7 +24,11 @@ struct MovieDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
-                // Backdrop image
+                // Backdrop image.
+                //
+                // backgroundExtensionEffect() mirrors and blurs the artwork out
+                // under the status bar and navigation chrome, so the still bleeds
+                // to the edges instead of stopping at a hard rectangle.
                 if let backdropURL = viewModel.backdropURL {
                     CachedAsyncImage(url: backdropURL, placeholder: {
                         Color.gray.opacity(0.3)
@@ -35,6 +39,7 @@ struct MovieDetailView: View {
                     })
                     .frame(height: 200)
                     .clipped()
+                    .backgroundExtensionEffect()
                 }
 
                 VStack(spacing: Spacing.md) {
@@ -331,6 +336,9 @@ Spacer(minLength: 0)
             }
         }
         .background(Color.primaryBackground)
+        // Soft scroll edge so the glass navigation bar dissolves into the
+        // artwork rather than sitting on a hard line.
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {

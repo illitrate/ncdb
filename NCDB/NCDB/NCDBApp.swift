@@ -144,37 +144,31 @@ struct MainTabView: View {
     private var events: AppEvents { AppEvents.shared }
 
     var body: some View {
+        // Value-based Tab API: the tab bar can minimize on scroll and adapt to a
+        // sidebar on iPad, neither of which the old .tabItem/.tag form supports.
         TabView(selection: $selectedTab) {
-            HomeView()
-                .tabItem {
-                    Label("Home", systemImage: SFSymbols.home)
-                }
-                .tag(AppTab.home)
+            Tab("Home", systemImage: SFSymbols.home, value: AppTab.home) {
+                HomeView()
+            }
 
-            MovieListView()
-                .tabItem {
-                    Label("Movies", systemImage: SFSymbols.movies)
-                }
-                .tag(AppTab.movies)
+            Tab("Movies", systemImage: SFSymbols.movies, value: AppTab.movies) {
+                MovieListView()
+            }
 
-            RankingsView()
-                .tabItem {
-                    Label("Rankings", systemImage: SFSymbols.rankings)
-                }
-                .tag(AppTab.rankings)
+            Tab("Rankings", systemImage: SFSymbols.rankings, value: AppTab.rankings) {
+                RankingsView()
+            }
 
-            AchievementsView()
-                .tabItem {
-                    Label("Achievements", systemImage: SFSymbols.achievement)
-                }
-                .tag(AppTab.achievements)
+            Tab("Achievements", systemImage: SFSymbols.achievement, value: AppTab.achievements) {
+                AchievementsView()
+            }
 
-            SettingsView()
-                .tabItem {
-                    Label("Settings", systemImage: SFSymbols.settings)
-                }
-                .tag(AppTab.settings)
+            Tab("Settings", systemImage: SFSymbols.settings, value: AppTab.settings) {
+                SettingsView()
+            }
         }
+        .tabViewStyle(.sidebarAdaptable)
+        .tabBarMinimizeBehavior(.onScrollDown)
         .overlay(alignment: .top) {
             if showToast, let achievement = events.latestUnlockedAchievement {
                 AchievementToast(
