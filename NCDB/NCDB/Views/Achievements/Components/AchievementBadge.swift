@@ -9,6 +9,9 @@ import SwiftUI
 
 /// Visual badge component for displaying achievement status
 struct AchievementBadge: View {
+
+    /// Badge glyphs track the user's text size.
+    @ScaledMetric(relativeTo: .body) private var badgeScale: CGFloat = 1
     let definition: AchievementDefinition
     let isUnlocked: Bool
     let progress: Double // 0.0 to 1.0
@@ -36,7 +39,7 @@ struct AchievementBadge: View {
 
                 // Icon
                 Image(systemName: definition.icon)
-                    .font(.system(size: 32))
+                    .font(.system(size: 32 * badgeScale))
                     .foregroundStyle(isUnlocked ? .white : Color.tertiaryText)
             }
 

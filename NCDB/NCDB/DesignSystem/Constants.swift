@@ -9,12 +9,10 @@ import SwiftUI
 nonisolated enum AppConstants {
     static let appName = "Nicolas Cage Database"
     static let shortName = "NCDB"
-    static let appVersion = "1.0.0"
-    static let buildNumber = "1"
-
-    // Bundle identifiers
-    static let bundleID = "com.ncdb.app"
-    static let widgetBundleID = "com.ncdb.app.widgets"
+    // Version comes from the bundle, not a constant that drifts from it.
+    // The old appVersion/buildNumber/bundleID constants disagreed with the
+    // actual bundle (com.ncdb.app vs illitrate-Publicashions.NCDB) and were
+    // never read by anything.
     static let appGroupID = "group.com.ncdb.shared"
 
     // Deep link scheme

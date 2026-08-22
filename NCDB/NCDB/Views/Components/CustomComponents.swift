@@ -15,6 +15,10 @@ struct StarRatingView: View {
 
     @State private var hoverRating: Double?
 
+    /// Star glyphs scale with the user's text size rather than sitting at a
+    /// fixed point size.
+    @ScaledMetric(relativeTo: .body) private var scaleFactor: CGFloat = 1
+
     enum StarSize {
         case small, medium, large
 
@@ -35,11 +39,22 @@ struct StarRatingView: View {
         }
     }
 
+    /// Spoken as "three and a half stars" rather than a bare number.
+    private var accessibilityRatingDescription: String {
+        guard rating > 0 else { return "Not rated" }
+
+        let formatted = rating == rating.rounded()
+            ? String(format: "%.0f", rating)
+            : String(format: "%.1f", rating)
+
+        return rating == 1 ? "1 star" : "\(formatted) stars"
+    }
+
     var body: some View {
         HStack(spacing: size.spacing) {
             ForEach(1...maxRating, id: \.self) { index in
                 starImage(for: index)
-                    .font(.system(size: size.iconSize))
+                    .font(.system(size: size.iconSize * scaleFactor))
                     .foregroundStyle(starColor(for: index))
                     .onTapGesture {
                         if isInteractive {
@@ -50,8 +65,24 @@ struct StarRatingView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(String(format: "%.1f", rating)) out of \(maxRating) stars")
-        .accessibilityValue(isInteractive ? "Adjustable" : "")
+        .accessibilityLabel("Rating")
+        .accessibilityValue(accessibilityRatingDescription)
+        .accessibilityAddTraits(isInteractive ? .isButton : [])
+        // VoiceOver users adjust with a swipe up/down rather than having to
+        // hit one of five small targets.
+        .accessibilityAdjustableAction { direction in
+            guard isInteractive else { return }
+
+            let step = 0.5
+            switch direction {
+            case .increment:
+                onRatingChanged?(min(Double(maxRating), rating + step))
+            case .decrement:
+                onRatingChanged?(max(0, rating - step))
+            @unknown default:
+                break
+            }
+        }
     }
 
     private func starImage(for index: Int) -> Image {
@@ -111,8 +142,36 @@ struct MoviePosterCard: View {
                 cardContent
             }
         }
-        .accessibilityLabel("\(movie.title), \(movie.releaseYear)")
-        .accessibilityHint("Double tap to view details")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityHint("Opens film details")
+        .accessibilityAddTraits(.isButton)
+    }
+
+    /// What VoiceOver reads: title, year, and the state the poster shows
+    /// visually through badges and overlays.
+    private var accessibilityDescription: String {
+        var parts = ["\(movie.title), \(movie.releaseYear)"]
+
+        if movie.watched {
+            parts.append(movie.watchCount > 1 ? "watched \(movie.watchCount) times" : "watched")
+        } else {
+            parts.append("not watched")
+        }
+
+        if let rating = movie.userRating, rating > 0 {
+            parts.append("rated \(String(format: "%.1f", rating)) stars")
+        }
+
+        if let position = movie.rankingPosition {
+            parts.append("ranked number \(position)")
+        }
+
+        if movie.isFavorite {
+            parts.append("favourite")
+        }
+
+        return parts.joined(separator: ", ")
     }
 
     @ViewBuilder
@@ -264,6 +323,10 @@ struct StatCard: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        // Otherwise VoiceOver reads "WATCHED" and "42" as separate elements.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(subtitle.map { "\(value), \($0)" } ?? value)
     }
 }
 

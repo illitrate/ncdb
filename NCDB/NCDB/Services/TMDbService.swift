@@ -46,6 +46,70 @@ class TMDbService {
         self.apiKey = newKey
     }
 
+    // MARK: - Authentication
+
+    /// TMDb accepts either a v3 API key as a query parameter, or a v4 Read
+    /// Access Token in an Authorization header. The header is preferable —
+    /// query strings end up in proxy logs and crash reports — so use it
+    /// whenever the stored credential is a v4 token (a JWT), and fall back to
+    /// the query parameter for existing v3 keys.
+    /// Internal rather than private so tests can pin the behaviour.
+    var usesBearerToken: Bool {
+        apiKey.hasPrefix("eyJ")
+    }
+
+    /// Build a request, putting the credential in the safest place available.
+    private func makeRequest(path: String, queryItems: [URLQueryItem] = []) throws -> URLRequest {
+        guard var components = URLComponents(string: "\(baseURL)\(path)") else {
+            throw TMDbError.invalidURL
+        }
+
+        var items = queryItems
+        if !usesBearerToken {
+            items.append(URLQueryItem(name: "api_key", value: apiKey))
+        }
+        components.queryItems = items.isEmpty ? nil : items
+
+        guard let url = components.url else {
+            throw TMDbError.invalidURL
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        if usesBearerToken {
+            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        }
+
+        return request
+    }
+
+    /// Run a request and decode it, mapping HTTP failures onto TMDbError.
+    private func perform<T: Decodable>(_ request: URLRequest, as type: T.Type) async throws -> T {
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw TMDbError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200...299:
+            break
+        case 401:
+            throw TMDbError.invalidAPIKey
+        case 429:
+            throw TMDbError.rateLimitExceeded
+        default:
+            throw TMDbError.apiError(statusCode: httpResponse.statusCode, message: "Request failed")
+        }
+
+        do {
+            return try decoder.decode(T.self, from: data)
+        } catch {
+            throw TMDbError.decodingError(error)
+        }
+    }
+
     // MARK: - Rate Limiting
     private func enforceRateLimit() async {
         let now = Date()
@@ -68,93 +132,45 @@ class TMDbService {
     func fetchNicolasCageMovies() async throws -> [TMDbMovie] {
         await enforceRateLimit()
 
-        let endpoint = "\(baseURL)/person/\(nicolasCageID)/movie_credits"
-        guard var components = URLComponents(string: endpoint) else {
-            throw TMDbError.invalidURL
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: apiKey),
-            URLQueryItem(name: "language", value: "en-US")
-        ]
-
-        guard let url = components.url else {
-            throw TMDbError.invalidURL
-        }
+        let request = try makeRequest(
+            path: "/person/\(nicolasCageID)/movie_credits",
+            queryItems: [URLQueryItem(name: "language", value: "en-US")]
+        )
 
         isLoading = true
         defer { isLoading = false }
 
-        let (data, response) = try await session.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TMDbError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw TMDbError.apiError(statusCode: httpResponse.statusCode, message: "Request failed")
-        }
-
-        let credits = try decoder.decode(TMDbCreditsResponse.self, from: data)
-        return credits.cast
+        return try await perform(request, as: TMDbCreditsResponse.self).cast
     }
 
     /// Fetch detailed information about a specific movie
     func fetchMovieDetails(movieID: Int) async throws -> TMDbMovieDetails {
         await enforceRateLimit()
 
-        let endpoint = "\(baseURL)/movie/\(movieID)"
-        guard var components = URLComponents(string: endpoint) else {
-            throw TMDbError.invalidURL
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: apiKey),
-            URLQueryItem(name: "language", value: "en-US"),
-            URLQueryItem(name: "append_to_response", value: "credits,images")
-        ]
-
-        guard let url = components.url else {
-            throw TMDbError.invalidURL
-        }
+        let request = try makeRequest(
+            path: "/movie/\(movieID)",
+            queryItems: [
+                URLQueryItem(name: "language", value: "en-US"),
+                URLQueryItem(name: "append_to_response", value: "credits,images")
+            ]
+        )
 
         isLoading = true
         defer { isLoading = false }
 
-        let (data, response) = try await session.data(from: url)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TMDbError.invalidResponse
-        }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw TMDbError.apiError(statusCode: httpResponse.statusCode, message: "Request failed")
-        }
-
-        return try decoder.decode(TMDbMovieDetails.self, from: data)
+        return try await perform(request, as: TMDbMovieDetails.self)
     }
 
-    /// Validate an API key
+    /// Validate a credential — either a v3 API key or a v4 Read Access Token.
     func validateAPIKey(_ key: String) async -> Bool {
-        let testEndpoint = "\(baseURL)/configuration"
-        guard var components = URLComponents(string: testEndpoint) else {
-            return false
-        }
-
-        components.queryItems = [
-            URLQueryItem(name: "api_key", value: key)
-        ]
-
-        guard let url = components.url else {
-            return false
-        }
+        let previousKey = apiKey
+        apiKey = key
+        defer { apiKey = previousKey }
 
         do {
-            let (_, response) = try await session.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return false
-            }
-            return httpResponse.statusCode == 200
+            let request = try makeRequest(path: "/configuration")
+            let (_, response) = try await session.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
             return false
         }

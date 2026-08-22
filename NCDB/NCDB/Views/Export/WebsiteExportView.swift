@@ -97,10 +97,10 @@ struct WebsiteExportView: View {
                             if step.rawValue < currentStep.rawValue {
                                 Image(systemName: "checkmark")
                                     .foregroundStyle(Color.black)
-                                    .font(.system(size: 14, weight: .bold))
+                                    .font(.subheadline.bold())
                             } else {
                                 Text("\(step.rawValue + 1)")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(.subheadline.weight(.semibold))
                                     .foregroundStyle(step == currentStep ? Color.black : Color.secondaryText)
                             }
                         }

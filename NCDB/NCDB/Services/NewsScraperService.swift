@@ -93,7 +93,33 @@ final class NewsScraperService {
 
         Logger.shared.info("\(scored.count) of \(parsed.count) articles are relevant", category: .general)
 
-        return merge(scored, into: modelContext)
+        let inserted = merge(scored, into: modelContext)
+
+        // Refine categories on device where Apple Intelligence is available.
+        // Runs after the merge so the feed appears immediately either way.
+        await refineCategories(for: inserted, in: modelContext)
+
+        return inserted
+    }
+
+    /// Upgrade keyword-guessed categories using the on-device model.
+    ///
+    /// Best effort: if the model isn't available, the keyword categories that
+    /// `merge` already applied simply stand.
+    private func refineCategories(for articles: [NewsArticle], in modelContext: ModelContext) async {
+        guard CageIntelligence.shared.isAvailable, !articles.isEmpty else { return }
+
+        // Only the newest few — this is a nicety, not worth a long stall.
+        for article in articles.prefix(10) {
+            let category = await CageIntelligence.shared.categorise(
+                title: article.title,
+                summary: article.summary
+            )
+            article.category = category
+        }
+
+        try? modelContext.save()
+        Logger.shared.debug("Refined categories for \(min(articles.count, 10)) articles", category: .news)
     }
 
     /// Insert genuinely new articles and refresh derived fields on existing ones.

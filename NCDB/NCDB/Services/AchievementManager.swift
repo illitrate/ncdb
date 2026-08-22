@@ -591,8 +591,16 @@ final class AchievementManager {
 
         Logger.shared.info("Achievement unlocked: \(definition.title)", category: .general)
 
-        // Post notification for UI updates
+        // In-app toast
         AppEvents.shared.achievementUnlocked(id: definition.id)
+
+        // System notification. This was never wired up — the scheduling method
+        // existed but had no caller anywhere in the app.
+        NotificationManager.shared.scheduleAchievementNotification(
+            title: definition.title,
+            description: definition.description,
+            achievementId: definition.id
+        )
     }
 
     /// Manually mark an achievement as unlocked (for special cases)

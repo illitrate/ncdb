@@ -48,11 +48,11 @@ final class SettingsViewModel {
 
     /// App info
     var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     }
 
     var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "10"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
     }
 
     /// Preferences
@@ -383,8 +383,11 @@ final class SettingsViewModel {
         return date.formatted(as: .relative)
     }
 
-    /// Full version string
+    /// Version and build, e.g. "2.0 (12)".
+    ///
+    /// Deliberately without a "Version" prefix — the About screen adds its own,
+    /// which is why it read "Version Version 1.0 (11)".
     var fullVersionString: String {
-        "Version \(appVersion) (\(buildNumber))"
+        "\(appVersion) (\(buildNumber))"
     }
 }

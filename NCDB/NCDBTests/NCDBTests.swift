@@ -236,3 +236,34 @@ struct NewsFilterTests {
         #expect(category != .general)
     }
 }
+
+// MARK: - TMDb Authentication
+
+@MainActor
+struct TMDbAuthTests {
+
+    @Test("A v4 read access token goes in the Authorization header")
+    func detectsBearerToken() {
+        let service = TMDbService(apiKey: "eyJhbGciOiJIUzI1NiJ9.payload.signature")
+        #expect(service.usesBearerToken)
+    }
+
+    @Test("A v3 API key still uses the query parameter")
+    func fallsBackToQueryKey() {
+        let service = TMDbService(apiKey: "0123456789abcdef0123456789abcdef")
+        #expect(!service.usesBearerToken)
+    }
+}
+
+// MARK: - Version Display
+
+@MainActor
+struct VersionTests {
+
+    @Test("The version string doesn't repeat the word Version")
+    func versionStringIsNotDoubled() {
+        let viewModel = SettingsViewModel()
+        // The About screen renders "Version \(fullVersionString)".
+        #expect(!viewModel.fullVersionString.lowercased().contains("version"))
+    }
+}

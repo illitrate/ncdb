@@ -113,8 +113,14 @@ struct MovieListView: View {
         }
     }
 
+    /// Adaptive rather than a fixed pair of columns: two on iPhone, more as the
+    /// window gets wider, which is what makes the iPad build usable.
+    private var gridColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 150, maximum: 220), spacing: Spacing.md)]
+    }
+
     private var gridView: some View {
-        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
+        LazyVGrid(columns: gridColumns, spacing: Spacing.md) {
             ForEach(filteredProductions) { production in
                 NavigationLink(value: production) {
                     MoviePosterCard(movie: production, size: .large)

@@ -68,8 +68,23 @@ struct SettingsView: View {
                 Section("Preferences") {
                     Toggle("Haptic Feedback", isOn: $viewModel.hapticsEnabled)
                     Toggle("Notifications", isOn: $viewModel.notificationsEnabled)
+                        .onChange(of: viewModel.notificationsEnabled) { _, isOn in
+                            guard isOn else { return }
+                            Task { await NotificationManager.shared.ensureAuthorized() }
+                        }
+
                     Toggle("Achievement Notifications", isOn: $viewModel.achievementNotificationsEnabled)
                         .disabled(!viewModel.notificationsEnabled)
+                        .onChange(of: viewModel.achievementNotificationsEnabled) { _, isOn in
+                            guard isOn else { return }
+                            Task { await NotificationManager.shared.ensureAuthorized() }
+                        }
+
+                    if NotificationManager.shared.authorizationStatus == .denied {
+                        Text("Notifications are turned off for NCDB in iOS Settings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 // Content Filtering

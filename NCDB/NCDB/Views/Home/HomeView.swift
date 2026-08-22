@@ -27,6 +27,7 @@ struct HomeView: View {
     @State private var viewModel = HomeViewModel()
     @State private var showAbout = false
     @State private var path = NavigationPath()
+    @State private var showRecommendation = false
 
     /// Apply content filtering to productions
     private var filteredProductions: [Production] {
@@ -52,7 +53,7 @@ struct HomeView: View {
                     .padding(.horizontal, Spacing.md)
 
                     // Quick Stats (tap to view full stats)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)], spacing: Spacing.md) {
                         NavigationLink(value: HomeNavigationDestination.stats) {
                             StatCard(
                                 title: "Watched",
@@ -136,6 +137,35 @@ struct HomeView: View {
                             }
                         }
                     }
+
+                    // What should I watch tonight — on-device pick
+                    Button {
+                        showRecommendation = true
+                    } label: {
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(Color.cageGold)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("What Should I Watch?")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.primaryText)
+                                Text("A pick from your watchlist, chosen on device")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.secondaryText)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiaryText)
+                        }
+                        .padding(Spacing.md)
+                        .glassEffect(.regular, in: .rect(cornerRadius: Sizes.cornerRadiusMedium))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, Spacing.md)
 
                     // Viewing Diary
                     //
@@ -272,6 +302,9 @@ struct HomeView: View {
             .refreshable {
                 await viewModel.loadDashboardData(productions: filteredProductions)
             }
+        }
+        .sheet(isPresented: $showRecommendation) {
+            RecommendationView(productions: filteredProductions)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
