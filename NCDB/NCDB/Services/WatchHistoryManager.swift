@@ -68,7 +68,7 @@ final class WatchHistoryManager {
         Logger.shared.info("Created watch event for: \(production.title)", category: .general)
 
         // Notify achievement tracker
-        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
+        AppEvents.shared.productionWatchStateChanged()
     }
 
     /// Get all watch events for a production
@@ -120,7 +120,7 @@ final class WatchHistoryManager {
         Logger.shared.info("Deleted watch event", category: .general)
 
         // Notify achievement tracker
-        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
+        AppEvents.shared.productionWatchStateChanged()
     }
 
     // MARK: - Statistics

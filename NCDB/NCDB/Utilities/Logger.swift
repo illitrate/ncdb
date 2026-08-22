@@ -8,13 +8,16 @@
 import Foundation
 import OSLog
 
-/// Centralized logging utility for NCDB app
-/// Provides structured logging with different severity levels
-final class Logger {
+/// Centralized logging utility for NCDB app.
+///
+/// `Sendable` and free of actor isolation on purpose: logging is called from
+/// actors, background tasks and detached work, and having to `await` a log line
+/// would be absurd. All state is immutable after `init`.
+nonisolated final class Logger: Sendable {
 
     // MARK: - Log Levels
 
-    enum Level: String {
+    enum Level: String, Sendable, CaseIterable {
         case debug = "🔍 DEBUG"
         case info = "ℹ️ INFO"
         case warning = "⚠️ WARNING"
@@ -24,7 +27,7 @@ final class Logger {
 
     // MARK: - Categories
 
-    enum Category: String {
+    enum Category: String, Sendable {
         case general = "General"
         case network = "Network"
         case database = "Database"
@@ -42,24 +45,28 @@ final class Logger {
     static let shared = Logger()
 
     /// OSLog subsystem
-    private let subsystem = "com.illitrate-publicashions.NCDB"
+    private static let subsystem = "com.illitrate-publicashions.NCDB"
 
     /// Log handlers for different categories
-    private var loggers: [Category: os.Logger] = [:]
+    private let loggers: [Category: os.Logger]
 
     /// Enable/disable logging
-    var isEnabled = true
+    let isEnabled: Bool
 
     /// Minimum log level to display
-    var minimumLevel: Level = .debug
+    let minimumLevel: Level
 
     // MARK: - Initialization
 
-    private init() {
-        // Initialize loggers for each category
+    private init(isEnabled: Bool = true, minimumLevel: Level = .debug) {
+        self.isEnabled = isEnabled
+        self.minimumLevel = minimumLevel
+
+        var loggers: [Category: os.Logger] = [:]
         for category in Category.allCases {
-            loggers[category] = os.Logger(subsystem: subsystem, category: category.rawValue)
+            loggers[category] = os.Logger(subsystem: Self.subsystem, category: category.rawValue)
         }
+        self.loggers = loggers
     }
 
     // MARK: - Logging Methods
@@ -109,7 +116,7 @@ final class Logger {
         guard shouldLog(level: level) else { return }
 
         let filename = (file as NSString).lastPathComponent
-        let timestamp = dateFormatter.string(from: Date())
+        let timestamp = Date().formatted(Self.timestampStyle)
         let formattedMessage = "[\(timestamp)] \(level.rawValue) [\(category.rawValue)] \(filename):\(line) \(function) - \(message)"
 
         // Print to console in debug builds
@@ -143,13 +150,15 @@ final class Logger {
         return currentIndex >= minimumIndex
     }
 
-    // MARK: - Date Formatter
+    // MARK: - Timestamps
 
-    private lazy var dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss.SSS"
-        return formatter
-    }()
+    /// `DateFormatter` is not Sendable, so timestamps go through the value-type
+    /// format style instead.
+    private static let timestampStyle = Date.FormatStyle()
+        .hour(.twoDigits(amPM: .omitted))
+        .minute(.twoDigits)
+        .second(.twoDigits)
+        .secondFraction(.fractional(3))
 }
 
 // MARK: - Category CaseIterable

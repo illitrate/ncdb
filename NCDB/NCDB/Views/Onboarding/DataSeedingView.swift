@@ -98,7 +98,7 @@ struct DataSeedingView: View {
 
     private func loadAPIKeyAndMovies() {
         // Try to load API key from Keychain
-        if let keychainKey = try? KeychainHelper.shared.getTMDbAPIKey() {
+        if let keychainKey = KeychainHelper.shared.getTMDbAPIKey() {
             savedApiKey = keychainKey
             Logger.shared.info("Loaded TMDb API key from Keychain", category: .general)
             Task {

@@ -23,7 +23,7 @@ enum AppConstants {
 
 // MARK: - TMDb API
 
-enum TMDbConstants {
+nonisolated enum TMDbConstants {
     static let baseURL = "https://api.themoviedb.org/3"
     static let imageBaseURL = "https://image.tmdb.org/t/p"
 
@@ -37,7 +37,7 @@ enum TMDbConstants {
         case large = "w500"
         case original = "original"
 
-        var url: String { "\(TMDbConstants.imageBaseURL)/\(rawValue)" }
+        nonisolated var url: String { "\(TMDbConstants.imageBaseURL)/\(rawValue)" }
     }
 
     enum BackdropSize: String {
@@ -46,7 +46,7 @@ enum TMDbConstants {
         case large = "w1280"
         case original = "original"
 
-        var url: String { "\(TMDbConstants.imageBaseURL)/\(rawValue)" }
+        nonisolated var url: String { "\(TMDbConstants.imageBaseURL)/\(rawValue)" }
     }
 
     enum ProfileSize: String {
@@ -55,7 +55,7 @@ enum TMDbConstants {
         case large = "h632"
         case original = "original"
 
-        var url: String { "\(TMDbConstants.imageBaseURL)/\(rawValue)" }
+        nonisolated var url: String { "\(TMDbConstants.imageBaseURL)/\(rawValue)" }
     }
 
     // Rate limiting
@@ -125,7 +125,7 @@ private enum ScreenMetrics {
             // Views should prefer GeometryReader or container-relative frames for accuracy.
             return 375 // Fallback width (e.g., iPhone 15 non-Pro logical width)
         } else {
-            return UIScreen.main.bounds.width
+            return MainActor.assumeIsolated { UIScreen.main.bounds.width }
         }
         #else
         return 375
@@ -289,17 +289,6 @@ enum UserDefaultsKeys {
     static let selectedTheme = "selectedTheme"
     static let notificationsEnabled = "notificationsEnabled"
     static let hapticFeedbackEnabled = "hapticFeedbackEnabled"
-}
-
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let productionUpdated = Notification.Name("productionUpdated")
-    static let rankingsChanged = Notification.Name("rankingsChanged")
-    static let achievementUnlocked = Notification.Name("achievementUnlocked")
-    static let newsRefreshed = Notification.Name("newsRefreshed")
-    static let tmdbSyncCompleted = Notification.Name("tmdbSyncCompleted")
-    static let exportCompleted = Notification.Name("exportCompleted")
 }
 
 // MARK: - SF Symbols

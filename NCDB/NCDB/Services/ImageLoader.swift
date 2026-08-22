@@ -31,15 +31,16 @@ final class ImageLoader {
     /// Cache manager
     private let cacheManager = ImageCacheManager.shared
 
-    /// Current download task
-    nonisolated(unsafe) private var downloadTask: Task<Void, Never>?
+    /// Current download task, held in a lock-guarded box so `deinit`
+    /// (which is nonisolated) can still cancel it.
+    private let downloadTaskBox = TaskBox()
 
     // MARK: - Initialization
 
     init() {}
 
     deinit {
-        downloadTask?.cancel()
+        downloadTaskBox.cancel()
     }
 
     // MARK: - Loading
@@ -64,7 +65,7 @@ final class ImageLoader {
         isLoading = true
         error = nil
 
-        downloadTask = Task {
+        downloadTaskBox.task = Task {
             do {
                 // Check cache first
                 if let cachedImage = await cacheManager.getCachedImage(for: url) {
@@ -104,13 +105,12 @@ final class ImageLoader {
             }
         }
 
-        await downloadTask?.value
+        await downloadTaskBox.task?.value
     }
 
     /// Cancel the current download
     func cancel() {
-        downloadTask?.cancel()
-        downloadTask = nil
+        downloadTaskBox.cancel()
     }
 
     /// Reset the loader
@@ -221,5 +221,35 @@ private struct ShimmerModifier: ViewModifier {
                     phase = 1
                 }
             }
+    }
+}
+
+
+// MARK: - Task Box
+
+/// Holds the in-flight download so a nonisolated `deinit` can cancel it safely.
+private nonisolated final class TaskBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: Task<Void, Never>?
+
+    var task: Task<Void, Never>? {
+        get { lock.withLock { storage } }
+        set {
+            let previous = lock.withLock {
+                let old = storage
+                storage = newValue
+                return old
+            }
+            previous?.cancel()
+        }
+    }
+
+    func cancel() {
+        let pending = lock.withLock {
+            let current = storage
+            storage = nil
+            return current
+        }
+        pending?.cancel()
     }
 }

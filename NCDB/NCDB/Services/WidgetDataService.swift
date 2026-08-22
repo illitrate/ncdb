@@ -21,7 +21,9 @@ final class WidgetDataService {
 
     // MARK: - Widget Data Models
 
-    struct WidgetData: Codable {
+    /// Plain snapshot written to the shared container. Explicitly nonisolated:
+    /// the widget extension decodes it outside the main actor.
+    nonisolated struct WidgetData: Codable, Sendable {
         let watchedCount: Int
         let totalCount: Int
         let completionPercentage: Double
@@ -30,7 +32,7 @@ final class WidgetDataService {
         let recentAchievements: [Achievement]
         let lastUpdated: Date
 
-        struct RankedMovie: Codable {
+        struct RankedMovie: Codable, Sendable {
             let title: String
             let year: Int
             let rank: Int
@@ -38,7 +40,7 @@ final class WidgetDataService {
             let rating: Double?
         }
 
-        struct Achievement: Codable {
+        struct Achievement: Codable, Sendable {
             let title: String
             let icon: String
             let unlockedAt: Date
@@ -54,8 +56,8 @@ final class WidgetDataService {
     ) {
         let watchedProductions = productions.filter { $0.watched }
         let rankedProductions = productions
-            .filter { ($0.rankingPosition ?? 0) > 0 }
-            .sorted { ($0.rankingPosition ?? 0) < ($1.rankingPosition ?? 0) }
+            .filter(\.isRanked)
+            .sorted { ($0.rankingPosition ?? .max) < ($1.rankingPosition ?? .max) }
 
         // Calculate average rating
         let ratings = watchedProductions.compactMap { $0.userRating }
@@ -235,8 +237,3 @@ final class WidgetDataService {
     }
 }
 
-// MARK: - Notification Names
-
-extension Notification.Name {
-    static let widgetDataUpdated = Notification.Name("widgetDataUpdated")
-}

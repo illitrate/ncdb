@@ -13,8 +13,9 @@ struct NewsSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
 
-    @State private var newsNotificationsEnabled = UserDefaults.standard.bool(forKey: "newsNotificationsEnabled")
-    @State private var backgroundRefreshEnabled = UserDefaults.standard.bool(forKey: "backgroundRefreshEnabled")
+    @State private var newsNotificationsEnabled = NewsCacheManager.shared.newsNotificationsEnabled
+    @State private var backgroundRefreshEnabled = NewsCacheManager.shared.backgroundRefreshEnabled
+    @State private var scrapeFrequency = NewsCacheManager.shared.scrapeFrequency
     @State private var showingClearConfirmation = false
 
     private let cacheManager = NewsCacheManager.shared
@@ -27,7 +28,7 @@ struct NewsSettingsView: View {
                 Section("Notifications") {
                     Toggle("News Notifications", isOn: $newsNotificationsEnabled)
                         .onChange(of: newsNotificationsEnabled) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: "newsNotificationsEnabled")
+                            cacheManager.newsNotificationsEnabled = newValue
 
                             if newValue {
                                 Task {
@@ -47,17 +48,27 @@ struct NewsSettingsView: View {
                 Section("Background Refresh") {
                     Toggle("Auto Refresh", isOn: $backgroundRefreshEnabled)
                         .onChange(of: backgroundRefreshEnabled) { _, newValue in
-                            UserDefaults.standard.set(newValue, forKey: "backgroundRefreshEnabled")
+                            cacheManager.backgroundRefreshEnabled = newValue
 
                             if newValue {
-                                backgroundTaskManager.scheduleNewsRefresh()
+                                backgroundTaskManager.scheduleAllTasks()
                             } else {
                                 backgroundTaskManager.cancelAllTasks()
                             }
                         }
 
                     if backgroundRefreshEnabled {
-                        Text("Automatically fetch new articles in the background")
+                        Picker("Frequency", selection: $scrapeFrequency) {
+                            ForEach(NewsScrapeFrequency.allCases, id: \.self) { frequency in
+                                Text(frequency.displayName).tag(frequency)
+                            }
+                        }
+                        .onChange(of: scrapeFrequency) { _, newValue in
+                            cacheManager.scrapeFrequency = newValue
+                            backgroundTaskManager.scheduleNewsRefresh()
+                        }
+
+                        Text("iOS decides exactly when to run background refreshes, so the frequency is a target rather than a guarantee.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -79,14 +90,14 @@ struct NewsSettingsView: View {
 
                 // About Section
                 Section("About") {
-                    LabeledContent("Sources", value: "5 news sources")
+                    LabeledContent("Sources", value: "7 news sources")
 
                     VStack(alignment: .leading, spacing: Spacing.xs) {
                         Text("Sources:")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
-                        Text("• The Hollywood Reporter\n• Variety\n• Deadline\n• IndieWire\n• Collider")
+                        Text("• The Hollywood Reporter\n• Variety\n• Deadline\n• IndieWire\n• /Film\n• The Wrap\n• Google News")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

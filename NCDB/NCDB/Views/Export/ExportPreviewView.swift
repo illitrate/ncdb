@@ -275,14 +275,14 @@ struct ExportPreviewView: View {
 
         var files: [URL] = []
 
+        // `FileManager.DirectoryEnumerator` can't be iterated from an async
+        // context, so drain it eagerly first.
         if let enumerator = fileManager.enumerator(
             at: websiteURL,
             includingPropertiesForKeys: [.isDirectoryKey, .fileSizeKey],
             options: [.skipsHiddenFiles]
         ) {
-            for case let fileURL as URL in enumerator {
-                files.append(fileURL)
-            }
+            files = enumerator.allObjects.compactMap { $0 as? URL }
         }
 
         // Sort: directories first, then by name

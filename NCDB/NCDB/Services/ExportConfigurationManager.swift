@@ -35,7 +35,11 @@ final class ExportConfigurationManager {
         set { UserDefaults.standard.set(newValue, forKey: "ftpPath") }
     }
 
-    var useSFTP: Bool {
+    /// Use implicit TLS (FTPS) rather than plaintext FTP.
+    ///
+    /// Reuses the legacy "useSFTP" defaults key so existing installs keep their
+    /// setting. SFTP over SSH was never actually implemented and is not offered.
+    var useFTPS: Bool {
         get { UserDefaults.standard.bool(forKey: "useSFTP") }
         set { UserDefaults.standard.set(newValue, forKey: "useSFTP") }
     }
@@ -112,7 +116,7 @@ final class ExportConfigurationManager {
         ftpPort = 21
         ftpUsername = ""
         ftpPath = "/public_html"
-        useSFTP = false
+        useFTPS = false
         websiteTitle = "My Nicolas Cage Collection"
         includePosters = true
         autoUpload = false

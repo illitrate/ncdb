@@ -8,10 +8,12 @@
 import Foundation
 import UIKit
 
-/// Manages in-memory and disk caching for TMDb images
-/// Provides high-performance image caching with automatic memory management
-@MainActor
-final class ImageCacheManager {
+/// Manages in-memory and disk caching for TMDb images.
+///
+/// An `actor`, deliberately: every method here touches the file system, encodes
+/// or decodes JPEG data, or walks a directory. Running that on the main actor
+/// (as 1.x did) stalls scrolling in the poster grid.
+actor ImageCacheManager {
 
     // MARK: - Singleton
     static let shared = ImageCacheManager()
@@ -49,11 +51,12 @@ final class ImageCacheManager {
 
         // Create disk cache directory if needed
         try? fileManager.createDirectory(at: diskCacheURL, withIntermediateDirectories: true)
+    }
 
-        // Clean up expired cache on init
-        Task {
-            await cleanExpiredCache()
-        }
+    /// Remove expired files. Called once at launch rather than from `init`, so
+    /// the actor isn't doing disk work before it is fully initialised.
+    func startup() async {
+        await cleanExpiredCache()
     }
 
     // MARK: - Cache Key Generation
@@ -108,7 +111,7 @@ final class ImageCacheManager {
             ]
             try fileManager.setAttributes(attributes, ofItemAtPath: fileURL.path)
         } catch {
-            print("❌ Failed to cache image to disk: \(error.localizedDescription)")
+            Logger.shared.error("Failed to cache image to disk: \(error.localizedDescription)", category: .general)
         }
     }
 
@@ -131,7 +134,7 @@ final class ImageCacheManager {
                 }
             }
         } catch {
-            print("❌ Failed to check file attributes: \(error.localizedDescription)")
+            Logger.shared.error("Failed to check cached file attributes: \(error.localizedDescription)", category: .general)
         }
 
         // Load image from disk
@@ -153,9 +156,9 @@ final class ImageCacheManager {
             for fileURL in fileURLs {
                 try fileManager.removeItem(at: fileURL)
             }
-            print("✅ Disk cache cleared successfully")
+            Logger.shared.info("Disk cache cleared", category: .general)
         } catch {
-            print("❌ Failed to clear disk cache: \(error.localizedDescription)")
+            Logger.shared.error("Failed to clear disk cache: \(error.localizedDescription)", category: .general)
         }
     }
 
@@ -176,10 +179,10 @@ final class ImageCacheManager {
             }
 
             if deletedCount > 0 {
-                print("✅ Cleaned up \(deletedCount) expired cache files")
+                Logger.shared.info("Cleaned up \(deletedCount) expired cache files", category: .general)
             }
         } catch {
-            print("❌ Failed to clean expired cache: \(error.localizedDescription)")
+            Logger.shared.error("Failed to clean expired cache: \(error.localizedDescription)", category: .general)
         }
     }
 
@@ -197,7 +200,7 @@ final class ImageCacheManager {
                 }
             }
         } catch {
-            print("❌ Failed to calculate disk cache size: \(error.localizedDescription)")
+            Logger.shared.error("Failed to calculate disk cache size: \(error.localizedDescription)", category: .general)
         }
 
         return totalSize
@@ -236,9 +239,9 @@ final class ImageCacheManager {
                 }
             }
 
-            print("✅ Trimmed disk cache: deleted \(deletedCount) files")
+            Logger.shared.info("Trimmed disk cache: deleted \(deletedCount) files", category: .general)
         } catch {
-            print("❌ Failed to trim disk cache: \(error.localizedDescription)")
+            Logger.shared.error("Failed to trim disk cache: \(error.localizedDescription)", category: .general)
         }
     }
 

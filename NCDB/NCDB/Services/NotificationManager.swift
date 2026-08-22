@@ -214,12 +214,11 @@ final class NotificationManager: NSObject {
             trigger: trigger
         )
 
-        center.add(request) { error in
-            if let error = error {
-                Logger.shared.error("Failed to send news notification: \(error)", category: .general)
-            } else {
-                Logger.shared.info("News notification sent for \(articleCount) articles", category: .general)
-            }
+        do {
+            try await center.add(request)
+            Logger.shared.info("News notification sent for \(articleCount) articles", category: .general)
+        } catch {
+            Logger.shared.error("Failed to send news notification: \(error)", category: .general)
         }
     }
 

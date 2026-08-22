@@ -368,7 +368,8 @@ final class DataManager {
             throw DataManagerError.notConfigured
         }
 
-        // Delete all entities
+        // Delete all entities. Order matters only for readability — the cascade
+        // rules on Production already take its children with it.
         try context.delete(model: WatchEvent.self)
         try context.delete(model: ExternalRating.self)
         try context.delete(model: CastMember.self)
@@ -376,6 +377,8 @@ final class DataManager {
         try context.delete(model: Production.self)
         try context.delete(model: NewsArticle.self)
         try context.delete(model: Achievement.self)
+        try context.delete(model: ExportTemplate.self)
+        try context.delete(model: UserPreferences.self)
 
         try save()
     }

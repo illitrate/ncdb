@@ -36,6 +36,10 @@ final class Production: Hashable {
     var watched: Bool = false
     var dateWatched: Date?
     var userRating: Double?
+    /// True when the user set `userRating` themselves. Ratings derived from a
+    /// ranking position leave this false, so a manual rating is never
+    /// overwritten by a reorder. See RankingViewModel.syncDerivedRatings().
+    var ratingIsUserSet: Bool = false
     var review: String?
     var quotes: String? // Stores favourite quotes (one per line)
     var isFavorite: Bool = false

@@ -234,7 +234,7 @@ struct WebsiteExportView: View {
                         )
 
                         statItem(
-                            value: "\(productions.filter { ($0.rankingPosition ?? 0) > 0 }.count)",
+                            value: "\(productions.filter(\.isRanked).count)",
                             label: "Ranked Movies"
                         )
 

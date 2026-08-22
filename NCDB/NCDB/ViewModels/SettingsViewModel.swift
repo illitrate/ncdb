@@ -277,7 +277,7 @@ final class SettingsViewModel {
         do {
             // Get all productions from database
             Logger.shared.info("Starting TMDb sync for extended details", category: .tmdb)
-            let productions = try await dataManager.fetchAllProductions()
+            let productions = try dataManager.fetchAllProductions()
 
             guard !productions.isEmpty else {
                 Logger.shared.warning("No movies in database to sync", category: .tmdb)
@@ -346,7 +346,7 @@ final class SettingsViewModel {
             }
 
             // Save all changes
-            try await dataManager.save()
+            try dataManager.save()
 
             syncProgress = 1.0
             lastSyncDate = Date()
@@ -364,25 +364,9 @@ final class SettingsViewModel {
 
     // MARK: - Data Management
 
-    /// Export all data
-    func exportData() async throws -> URL {
-        // This would create a JSON export of all user data
-        // For now, return a placeholder
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("ncdb_export.json")
-        try "{}".write(to: tempURL, atomically: true, encoding: .utf8)
-        return tempURL
-    }
-
-    /// Factory reset
-    func factoryReset() async {
-        // Clear all data
-        // This would need to be implemented in DataManager
-        await clearCache()
-        removeAPIKey()
-
-        HapticManager.shared.warning()
-        Logger.shared.warning("Factory reset completed", category: .general)
-    }
+    // Data export lives in ExportService (reached via ExportDataView); a full
+    // reset lives in SettingsView.resetAppData(). Both previously had stub
+    // duplicates here that wrote "{}" and skipped the database respectively.
 
     // MARK: - Computed Properties
 

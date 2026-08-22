@@ -356,8 +356,6 @@ Spacer(minLength: 0)
     private func shareReview() {
         guard let review = production.review, !review.isEmpty else { return }
 
-        let tmdbURL = URL(string: "https://www.themoviedb.org/movie/\(production.tmdbID)")!
-
         var reviewText = "My Review of \(production.title) (\(production.releaseYear))\n"
 
         if let rating = production.userRating, rating > 0 {
@@ -367,11 +365,22 @@ Spacer(minLength: 0)
         }
 
         reviewText += review
-        reviewText += "\n\nWatch on TMDb: \(tmdbURL.absoluteString)"
+
+        // Only link out when we actually know the TMDb id — interpolating the
+        // optional directly produced ".../movie/Optional(1234)".
+        let tmdbURL = production.tmdbID.flatMap {
+            URL(string: "https://www.themoviedb.org/movie/\($0)")
+        }
+
+        if let tmdbURL {
+            reviewText += "\n\nWatch on TMDb: \(tmdbURL.absoluteString)"
+        }
         reviewText += "\n\n#NicolasCage #NCDB"
 
+        let activityItems: [Any] = tmdbURL.map { [reviewText, $0] } ?? [reviewText]
+
         let activityVC = UIActivityViewController(
-            activityItems: [reviewText, tmdbURL],
+            activityItems: activityItems,
             applicationActivities: nil
         )
 

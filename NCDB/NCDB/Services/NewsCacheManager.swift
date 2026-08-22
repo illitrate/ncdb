@@ -21,18 +21,49 @@ final class NewsCacheManager {
     private let maxArticleCount: Int = 100
     private let lastFetchKey = "lastNewsFetchDate"
 
+    // MARK: - User Preferences
+
+    private let scrapeFrequencyKey = "newsScrapeFrequency"
+    private let notificationsKey = "newsNotificationsEnabled"
+    private let backgroundRefreshKey = "backgroundRefreshEnabled"
+
+    /// How often the feed refreshes itself. Drives both the launch check and
+    /// the background task schedule.
+    var scrapeFrequency: NewsScrapeFrequency {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: scrapeFrequencyKey),
+                  let frequency = NewsScrapeFrequency(rawValue: raw) else {
+                return .daily
+            }
+            return frequency
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: scrapeFrequencyKey) }
+    }
+
+    /// Whether to post a notification when a background refresh finds articles.
+    var newsNotificationsEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: notificationsKey) }
+        set { UserDefaults.standard.set(newValue, forKey: notificationsKey) }
+    }
+
+    /// Whether background refresh is enabled by the user.
+    var backgroundRefreshEnabled: Bool {
+        get { UserDefaults.standard.bool(forKey: backgroundRefreshKey) }
+        set { UserDefaults.standard.set(newValue, forKey: backgroundRefreshKey) }
+    }
+
     // MARK: - Fetch Management
 
-    /// Check if news should be refreshed
+    /// Check if news should be refreshed, based on the user's chosen frequency.
     var shouldRefreshNews: Bool {
+        let frequency = scrapeFrequency
+        guard frequency != .manual else { return false }
+
         guard let lastFetch = UserDefaults.standard.object(forKey: lastFetchKey) as? Date else {
             return true // Never fetched
         }
 
-        let timeSinceLastFetch = Date().timeIntervalSince(lastFetch)
-        let refreshInterval: TimeInterval = 60 * 60 // 1 hour
-
-        return timeSinceLastFetch >= refreshInterval
+        return Date().timeIntervalSince(lastFetch) >= frequency.timeInterval
     }
 
     /// Record successful news fetch

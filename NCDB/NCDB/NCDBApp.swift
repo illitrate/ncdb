@@ -13,75 +13,84 @@ struct NCDBApp: App {
 
     // MARK: - Model Container
 
-    var sharedModelContainer: ModelContainer = {
-        let schema = Schema([
-            Production.self,
-            CastMember.self,
-            WatchEvent.self,
-            ExternalRating.self,
-            CustomTag.self,
-            NewsArticle.self,
-            Achievement.self,
-            UserPreferences.self,
-            ExportTemplate.self
-        ])
+    /// Result of opening the persistent store. A failure surfaces the recovery
+    /// screen rather than deleting the user's library (see NCDBSchema.swift).
+    private enum ContainerState {
+        case ready(ModelContainer)
+        case failed(Error)
+    }
 
-        let modelConfiguration = ModelConfiguration(
-            schema: schema,
-            isStoredInMemoryOnly: false,
-            allowsSave: true
-        )
+    @State private var containerState: ContainerState
 
+    // MARK: - Initialization
+
+    init() {
+        _containerState = State(initialValue: Self.loadContainer())
+    }
+
+    private static func loadContainer() -> ContainerState {
         do {
-            return try ModelContainer(for: schema, configurations: [modelConfiguration])
+            return .ready(try NCDBModelContainer.load())
         } catch {
-            // If migration fails (e.g., schema changed), delete old database and create fresh one
-            Logger.shared.warning("ModelContainer creation failed, attempting recovery: \(error)", category: .database)
-
-            // Delete the old database files
-            let url = modelConfiguration.url
-            try? FileManager.default.removeItem(at: url)
-            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("sqlite-shm"))
-            try? FileManager.default.removeItem(at: url.deletingPathExtension().appendingPathExtension("sqlite-wal"))
-
-            // Try creating a fresh container
-            do {
-                let freshContainer = try ModelContainer(for: schema, configurations: [modelConfiguration])
-                Logger.shared.info("ModelContainer recreated successfully", category: .database)
-                return freshContainer
-            } catch {
-                fatalError("Could not create ModelContainer even after cleanup: \(error)")
-            }
+            Logger.shared.error("Model container failed to open: \(error)", category: .database)
+            return .failed(error)
         }
-    }()
+    }
 
     // MARK: - Body
 
     var body: some Scene {
         WindowGroup {
-            Group {
-                if hasCompletedOnboarding {
-                    MainTabView()
-                } else {
-                    OnboardingCoordinator()
+            switch containerState {
+            case .ready(let container):
+                rootView
+                    .modelContainer(container)
+                    .task { configure(with: container) }
+
+            case .failed(let error):
+                DatabaseRecoveryView(error: error) {
+                    containerState = Self.loadContainer()
                 }
             }
-            .preferredColorScheme(.dark)
-            .tint(.cageGold)
-            .onAppear {
-                configureAppearance()
-                configureDataManager()
-                configureAchievementTracking()
-                configureNewsRefresh()
+        }
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        Group {
+            if hasCompletedOnboarding {
+                MainTabView()
+            } else {
+                OnboardingCoordinator()
             }
         }
-        .modelContainer(sharedModelContainer)
+        .preferredColorScheme(.dark)
+        .tint(.cageGold)
+    }
+
+    // MARK: - Launch Configuration
+
+    private func configure(with container: ModelContainer) {
+        configureDataManager(with: container)
+        configureBackgroundTasks(container: container)
+        configureAchievementTracking()
+        configureNewsRefresh(container: container)
+    }
+
+    // MARK: - Background Tasks
+
+    private func configureBackgroundTasks(container: ModelContainer) {
+        BackgroundTaskManager.shared.registerBackgroundTasks(container: container)
+
+        if NewsCacheManager.shared.backgroundRefreshEnabled {
+            BackgroundTaskManager.shared.scheduleAllTasks()
+        }
     }
 
     // MARK: - Data Manager Configuration
 
-    private func configureDataManager() {
-        DataManager.shared.configure(with: sharedModelContainer)
+    private func configureDataManager(with container: ModelContainer) {
+        DataManager.shared.configure(with: container)
         Logger.shared.info("DataManager configured with ModelContainer", category: .general)
     }
 
@@ -100,10 +109,10 @@ struct NCDBApp: App {
 
     // MARK: - News Refresh Configuration
 
-    private func configureNewsRefresh() {
+    private func configureNewsRefresh(container: ModelContainer) {
         Task { @MainActor in
             let cacheManager = NewsCacheManager.shared
-            let modelContext = sharedModelContainer.mainContext
+            let modelContext = container.mainContext
 
             // Check if we need to fetch news
             let descriptor = FetchDescriptor<NewsArticle>()
@@ -124,37 +133,15 @@ struct NCDBApp: App {
         }
     }
 
-    // MARK: - Appearance Configuration
-
-    private func configureAppearance() {
-        // Navigation Bar
-        let navAppearance = UINavigationBarAppearance()
-        navAppearance.configureWithDefaultBackground()
-        navAppearance.backgroundEffect = UIBlurEffect(style: .systemMaterialDark)
-        navAppearance.titleTextAttributes = [.foregroundColor: UIColor.white]
-        navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor.white]
-
-        UINavigationBar.appearance().standardAppearance = navAppearance
-        UINavigationBar.appearance().compactAppearance = navAppearance
-        UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
-        UINavigationBar.appearance().tintColor = UIColor(Color.cageGold)
-
-        // Tab Bar
-        let tabAppearance = UITabBarAppearance()
-        tabAppearance.configureWithDefaultBackground()
-        tabAppearance.backgroundEffect = UIBlurEffect(style: .systemMaterialDark)
-
-        UITabBar.appearance().standardAppearance = tabAppearance
-        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
-    }
 }
 
 // MARK: - Main Tab View
 
 struct MainTabView: View {
     @State private var selectedTab: AppTab = .home
-    @State private var achievementToast: AchievementDefinition?
     @State private var showToast = false
+
+    private var events: AppEvents { AppEvents.shared }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -189,7 +176,7 @@ struct MainTabView: View {
                 .tag(AppTab.settings)
         }
         .overlay(alignment: .top) {
-            if showToast, let achievement = achievementToast {
+            if showToast, let achievement = events.latestUnlockedAchievement {
                 AchievementToast(
                     definition: achievement,
                     isPresented: $showToast
@@ -198,34 +185,25 @@ struct MainTabView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .onAppear {
-            setupAchievementNotifications()
+        .onChange(of: events.latestUnlockedAchievement?.id) { _, newValue in
+            guard newValue != nil else { return }
+            presentAchievementToast()
         }
     }
 
-    // MARK: - Achievement Notifications
+    // MARK: - Achievement Toast
 
-    private func setupAchievementNotifications() {
-        NotificationCenter.default.addObserver(
-            forName: .achievementUnlocked,
-            object: nil,
-            queue: .main
-        ) { notification in
-            if let achievementID = notification.object as? String,
-               let definition = AchievementManager.shared.allAchievements.first(where: { $0.id == achievementID }) {
-                achievementToast = definition
-                withAnimation(.spring()) {
-                    showToast = true
-                }
+    private func presentAchievementToast() {
+        withAnimation(.spring()) {
+            showToast = true
+        }
 
-                // Auto-dismiss after 3 seconds
-                Task {
-                    try? await Task.sleep(for: .seconds(3))
-                    withAnimation(.spring()) {
-                        showToast = false
-                    }
-                }
+        Task {
+            try? await Task.sleep(for: .seconds(3))
+            withAnimation(.spring()) {
+                showToast = false
             }
+            AppEvents.shared.latestUnlockedAchievement = nil
         }
     }
 }

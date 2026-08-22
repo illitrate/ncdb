@@ -129,8 +129,8 @@ final class HomeViewModel {
 
         // Top ranked (top 5)
         topRanked = productions
-            .filter { ($0.rankingPosition ?? 0) > 0 }
-            .sorted { ($0.rankingPosition ?? 0) < ($1.rankingPosition ?? 0) }
+            .filter(\.isRanked)
+            .sorted { ($0.rankingPosition ?? .max) < ($1.rankingPosition ?? .max) }
             .prefix(5)
             .map { $0 }
 

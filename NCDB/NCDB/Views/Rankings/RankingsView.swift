@@ -120,6 +120,11 @@ struct RankingsView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: AppEvents.shared.pendingRankingAdjustment?.token) { _, newValue in
+                guard newValue != nil,
+                      let production = AppEvents.shared.consumePendingRankingAdjustment() else { return }
+                viewModel.autoAdjustRankingOnRatingChange(production)
+            }
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
             }

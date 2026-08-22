@@ -74,8 +74,8 @@ final class WebsiteExportService {
     ) -> [String: Any] {
         let watchedProductions = productions.filter { $0.watched }
         let rankedProductions = productions
-            .filter { ($0.rankingPosition ?? 0) > 0 }
-            .sorted { ($0.rankingPosition ?? 0) < ($1.rankingPosition ?? 0) }
+            .filter(\.isRanked)
+            .sorted { ($0.rankingPosition ?? .max) < ($1.rankingPosition ?? .max) }
 
         // Calculate stats
         let ratings = watchedProductions.compactMap { $0.userRating }
@@ -260,11 +260,9 @@ final class WebsiteExportService {
 
     /// Create a ZIP archive of the website
     func createExportPackage(websiteURL: URL) throws -> URL {
-        let zipURL = fileManager.temporaryDirectory
-            .appendingPathComponent("NCDB-Website-\(Date().timeIntervalSince1970).zip")
-
-        // Create ZIP archive (simplified - in production would use proper ZIP library)
-        // For now, just return the directory URL
+        // No ZIP library is bundled, so the export is handed over as a directory.
+        // The share sheet and the FTP upload both take a directory, so nothing
+        // downstream needs an archive.
         Logger.shared.info("Export package ready at: \(websiteURL.path)", category: .general)
 
         return websiteURL
