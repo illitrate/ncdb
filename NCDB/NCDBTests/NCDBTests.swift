@@ -267,3 +267,170 @@ struct VersionTests {
         #expect(!viewModel.fullVersionString.lowercased().contains("version"))
     }
 }
+
+// MARK: - Ranking Reconciliation
+
+/// The merge cases CloudKit's per-property last-writer-wins can produce.
+/// None of these are conflicts SwiftData can see — every individual write is
+/// valid — so they have to be repaired after the fact.
+@MainActor
+struct RankingReconcilerTests {
+
+    private func makeContext() throws -> ModelContext {
+        let container = try ModelContainer(
+            for: NCDBModelContainer.schema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+        return ModelContext(container)
+    }
+
+    @discardableResult
+    private func insert(
+        _ context: ModelContext,
+        title: String,
+        position: Int?,
+        rating: Double? = nil,
+        watched: Date? = nil
+    ) -> Production {
+        let film = Production(title: title, releaseYear: 2000)
+        film.rankingPosition = position
+        film.userRating = rating
+        film.dateWatched = watched
+        film.watched = watched != nil
+        context.insert(film)
+        return film
+    }
+
+    private func positions(_ context: ModelContext) throws -> [Int] {
+        try context.fetch(FetchDescriptor<Production>())
+            .compactMap(\.rankingPosition)
+            .sorted()
+    }
+
+    @Test("A clean 1...n list needs no repair and is left alone")
+    func cleanListUntouched() throws {
+        let context = try makeContext()
+        for index in 1...5 {
+            insert(context, title: "Film \(index)", position: index)
+        }
+
+        #expect(!RankingReconciler.needsReconciliation(in: context))
+        #expect(RankingReconciler.reconcile(in: context) == 0)
+        #expect(try positions(context) == [1, 2, 3, 4, 5])
+    }
+
+    @Test("Gaps are closed — two devices removing different films")
+    func closesGaps() throws {
+        let context = try makeContext()
+        for position in [1, 2, 4, 7] {
+            insert(context, title: "Film \(position)", position: position)
+        }
+
+        #expect(RankingReconciler.needsReconciliation(in: context))
+        RankingReconciler.reconcile(in: context)
+
+        #expect(try positions(context) == [1, 2, 3, 4])
+    }
+
+    @Test("Duplicate positions are separated, higher rating winning the tie")
+    func breaksDuplicatesByRating() throws {
+        let context = try makeContext()
+        insert(context, title: "Top", position: 1)
+        let lowerRated = insert(context, title: "Lower", position: 2, rating: 3.0)
+        let higherRated = insert(context, title: "Higher", position: 2, rating: 4.5)
+
+        #expect(RankingReconciler.needsReconciliation(in: context))
+        RankingReconciler.reconcile(in: context)
+
+        #expect(try positions(context) == [1, 2, 3])
+        #expect(higherRated.rankingPosition == 2, "The better-rated film should take the contested slot")
+        #expect(lowerRated.rankingPosition == 3)
+    }
+
+    @Test("Equal ratings fall through to most recently watched")
+    func breaksDuplicatesByWatchDate() throws {
+        let context = try makeContext()
+        let older = insert(context, title: "Older", position: 1, rating: 4.0, watched: Date(timeIntervalSince1970: 1_000))
+        let newer = insert(context, title: "Newer", position: 1, rating: 4.0, watched: Date(timeIntervalSince1970: 9_000))
+
+        RankingReconciler.reconcile(in: context)
+
+        #expect(newer.rankingPosition == 1)
+        #expect(older.rankingPosition == 2)
+    }
+
+    @Test("Reconciliation is deterministic — both devices reach the same order")
+    func isDeterministic() throws {
+        // Same data, inserted in opposite orders, must converge.
+        func build(reversed: Bool) throws -> [String] {
+            let context = try makeContext()
+            var titles = ["Alpha", "Bravo", "Charlie"]
+            if reversed { titles.reverse() }
+            for title in titles {
+                insert(context, title: title, position: 1, rating: 4.0)
+            }
+            RankingReconciler.reconcile(in: context)
+            return try context.fetch(FetchDescriptor<Production>())
+                .sorted { ($0.rankingPosition ?? 0) < ($1.rankingPosition ?? 0) }
+                .map(\.title)
+        }
+
+        #expect(try build(reversed: false) == build(reversed: true))
+    }
+
+    @Test("Unranked films are ignored entirely")
+    func ignoresUnranked() throws {
+        let context = try makeContext()
+        insert(context, title: "Ranked", position: 1)
+        let unranked = insert(context, title: "Unranked", position: nil)
+
+        RankingReconciler.reconcile(in: context)
+
+        #expect(unranked.rankingPosition == nil)
+        #expect(try positions(context) == [1])
+    }
+
+    @Test("An empty library is not treated as broken")
+    func emptyLibrary() throws {
+        let context = try makeContext()
+        #expect(!RankingReconciler.needsReconciliation(in: context))
+        #expect(RankingReconciler.reconcile(in: context) == 0)
+    }
+}
+
+// MARK: - Filmography Import
+
+@MainActor
+struct FilmographyImporterTests {
+
+    @Test("Appearances as himself are classified as non-acting")
+    func detectsNonActingRoles() {
+        #expect(FilmographyImporter.isNonActingRole(character: "Self"))
+        #expect(FilmographyImporter.isNonActingRole(character: "Himself"))
+        #expect(FilmographyImporter.isNonActingRole(character: "Narrator"))
+        #expect(FilmographyImporter.isNonActingRole(character: "Self - Archive footage"))
+    }
+
+    @Test("Real roles are not flagged, including the substring traps")
+    func doesNotFlagRealRoles() {
+        #expect(!FilmographyImporter.isNonActingRole(character: "Castor Troy"))
+        #expect(!FilmographyImporter.isNonActingRole(character: "Ghost Rider"), "'ghost' contains 'host'")
+        #expect(!FilmographyImporter.isNonActingRole(character: "Benjamin Franklin Gates"))
+        #expect(!FilmographyImporter.isNonActingRole(character: nil))
+    }
+
+    @Test("An empty API key is rejected before any network call")
+    func rejectsEmptyKey() async throws {
+        let container = try ModelContainer(
+            for: NCDBModelContainer.schema,
+            configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
+        )
+
+        await #expect(throws: FilmographyImporter.ImportError.self) {
+            _ = try await FilmographyImporter.importFilmography(
+                apiKey: "",
+                modelContext: ModelContext(container)
+            )
+        }
+    }
+}

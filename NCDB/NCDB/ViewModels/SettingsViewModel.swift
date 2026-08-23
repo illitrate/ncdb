@@ -31,6 +31,9 @@ final class SettingsViewModel {
     var isSyncing = false
     var syncProgress: Double = 0
 
+    /// What the sync is currently doing, shown beside the progress indicator.
+    var syncStatusMessage = ""
+
     /// Last sync date - persisted in UserDefaults
     private let lastSyncDateKey = "lastTMDbSyncDate"
     var lastSyncDate: Date? {
@@ -263,15 +266,39 @@ final class SettingsViewModel {
         syncProgress = 0
 
         do {
-            // Get all productions from database
-            Logger.shared.info("Starting TMDb sync for extended details", category: .tmdb)
-            let productions = try dataManager.fetchAllProductions()
+            Logger.shared.info("Starting TMDb sync", category: .tmdb)
+            var productions = try dataManager.fetchAllProductions()
 
-            guard !productions.isEmpty else {
-                Logger.shared.warning("No movies in database to sync", category: .tmdb)
-                isSyncing = false
-                return
+            // An empty library isn't an error — it's the case that most needs
+            // fixing. Import the filmography first, then enrich it. This is the
+            // only route back for anyone who cleared their data, reset the app,
+            // or is setting up a device CloudKit hasn't populated yet.
+            if productions.isEmpty {
+                guard let context = dataManager.modelContext else {
+                    Logger.shared.error("No model context available for import", category: .tmdb)
+                    isSyncing = false
+                    return
+                }
+
+                Logger.shared.info("Library is empty — importing filmography first", category: .tmdb)
+                syncStatusMessage = "Importing filmography…"
+
+                let imported = try await FilmographyImporter.importFilmography(
+                    apiKey: apiKey,
+                    modelContext: context
+                )
+
+                Logger.shared.info("Imported \(imported) films", category: .tmdb)
+                productions = try dataManager.fetchAllProductions()
+
+                guard !productions.isEmpty else {
+                    Logger.shared.warning("TMDb returned no films for this account", category: .tmdb)
+                    isSyncing = false
+                    return
+                }
             }
+
+            syncStatusMessage = "Fetching details…"
 
             Logger.shared.info("Syncing details for \(productions.count) movies", category: .tmdb)
 

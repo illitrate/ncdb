@@ -121,64 +121,26 @@ struct DataSeedingView: View {
         progress = 0
 
         do {
-            statusMessage = "Configuring TMDb connection..."
-            progress = 0.2
-
-            // Initialize TMDb service
-            let tmdbService = TMDbService(apiKey: savedApiKey)
-
             statusMessage = "Fetching Nicolas Cage filmography..."
-            progress = 0.4
+            progress = 0.3
 
-            // Fetch movies
-            let movies = try await tmdbService.fetchNicolasCageMovies()
-
-            statusMessage = "Found \(movies.count) movies..."
-            progress = 0.6
-
-            // Import movies into database
-            statusMessage = "Saving movies to database..."
-            progress = 0.7
-
-            for (index, tmdbMovie) in movies.enumerated() {
-                // Convert TMDbMovie to Production model
-                let production = Production(
-                    title: tmdbMovie.title,
-                    releaseYear: tmdbMovie.releaseYear ?? 0,
-                    tmdbID: tmdbMovie.id
-                )
-
-                // Add additional metadata
-                production.posterPath = tmdbMovie.posterPath
-                production.plot = tmdbMovie.overview
-
-                // Store character name and detect non-acting appearances
-                production.characterName = tmdbMovie.character
-                production.isNonActingAppearance = isNonActingRole(character: tmdbMovie.character)
-
-                modelContext.insert(production)
-
-                // Update progress every 10 movies
-                if index % 10 == 0 {
-                    let savedProgress = 0.7 + (Double(index) / Double(movies.count)) * 0.3
-                    progress = savedProgress
-                    statusMessage = "Saving movies... (\(index + 1)/\(movies.count))"
+            let imported = try await FilmographyImporter.importFilmography(
+                apiKey: savedApiKey,
+                modelContext: modelContext
+            ) { completed, total in
+                Task { @MainActor in
+                    progress = 0.3 + (Double(completed) / Double(max(total, 1))) * 0.7
+                    statusMessage = "Saving films… (\(completed)/\(total))"
                 }
             }
 
-            // Save all movies to database
-            try modelContext.save()
-
-            Logger.shared.info("Saved \(movies.count) movies to database", category: .database)
-
             progress = 1.0
-            statusMessage = "Successfully loaded \(movies.count) movies!"
+            statusMessage = "Successfully loaded \(imported) movies!"
 
             HapticManager.shared.success()
-            Logger.shared.info("Loaded \(movies.count) movies from TMDb", category: .tmdb)
 
-            // Wait a bit before completing
-            try? await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+            // Let the completion message land before moving on.
+            try? await Task.sleep(for: .seconds(1.5))
 
             isLoading = false
             onComplete()
@@ -192,38 +154,4 @@ struct DataSeedingView: View {
         }
     }
 
-    /// Detect if a character name indicates a non-acting appearance
-    private func isNonActingRole(character: String?) -> Bool {
-        guard let character = character?.lowercased() else {
-            return false // Nil character doesn't necessarily mean non-acting
-        }
-
-        let nonActingIndicators = [
-            "self",
-            "himself",
-            "narrator",
-            "archive footage",
-            "host",
-            "interviewee",
-            "guest",
-            "participant"
-        ]
-
-        // Use word boundary matching to avoid false positives (e.g., "ghost" containing "host")
-        // Split character name into words and check for exact matches
-        let words = character.components(separatedBy: CharacterSet.alphanumerics.inverted)
-            .filter { !$0.isEmpty }
-
-        return nonActingIndicators.contains { indicator in
-            // Check if the indicator appears as a complete word
-            let indicatorWords = indicator.components(separatedBy: " ")
-            if indicatorWords.count == 1 {
-                // Single word indicator - check if it matches any word in character name
-                return words.contains(indicator)
-            } else {
-                // Multi-word indicator (like "archive footage") - check if phrase exists
-                return character.contains(indicator)
-            }
-        }
-    }
 }
