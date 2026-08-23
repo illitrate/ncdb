@@ -24,6 +24,7 @@ enum NCDBDeepLink {
 
     static var rankings: URL? { section("rankings") }
     static var achievements: URL? { section("achievements") }
+    static var news: URL? { section("news") }
     static var stats: URL? { section("stats") }
     static var watchlist: URL? { section("watchlist") }
 }

@@ -78,6 +78,16 @@ final class AppEvents {
         rankingsSharedVersion &+= 1
     }
 
+    // MARK: - Deep Links
+
+    /// A link the app should follow, set from code that can't route directly.
+    ///
+    /// NotificationManager is compiled into the widget extension as well as the
+    /// app, so it can't reference AppRouter (which depends on app-only types)
+    /// or UIApplication (unavailable in extensions). It sets this instead, and
+    /// the app acts on it.
+    var pendingDeepLink: URL?
+
     // MARK: - Ranking Adjustments
 
     /// A film whose rating or watched state changed and which the rankings

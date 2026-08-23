@@ -62,22 +62,15 @@ final class MovieListViewModel {
 
     // MARK: - Computed Properties
 
-    /// Available genres for filtering
-    var availableGenres: [String] {
-        // This would ideally come from a cached list
-        // For now, return common Nicolas Cage movie genres
-        return [
-            "Action",
-            "Adventure",
-            "Comedy",
-            "Crime",
-            "Drama",
-            "Fantasy",
-            "Horror",
-            "Science Fiction",
-            "Thriller",
-            "Mystery"
-        ].sorted()
+    /// Genres actually present in the library, for the filter list.
+    ///
+    /// This used to be a hardcoded list of ten "common" genres, which meant a
+    /// genre TMDb returned but the list didn't know about — Western, Music,
+    /// History — was unfilterable, while genres absent from the library were
+    /// offered and matched nothing.
+    func availableGenres(in productions: [Production]) -> [String] {
+        Set(productions.flatMap(\.genres))
+            .sorted()
     }
 
     // MARK: - Filtering & Sorting

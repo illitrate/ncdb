@@ -52,6 +52,13 @@ struct NCDBApp: App {
                     .onOpenURL { url in
                         AppRouter.shared.handle(url)
                     }
+                    // Tapping a notification routes through here, since
+                    // NotificationManager can't reach AppRouter directly.
+                    .onChange(of: AppEvents.shared.pendingDeepLink) { _, url in
+                        guard let url else { return }
+                        AppRouter.shared.handle(url)
+                        AppEvents.shared.pendingDeepLink = nil
+                    }
 
             case .failed(let error):
                 DatabaseRecoveryView(error: error) {

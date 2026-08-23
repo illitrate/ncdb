@@ -6,11 +6,15 @@
 //
 
 import SwiftUI
+import SwiftData
 
 /// Search and filter sheet
 struct SearchFilterView: View {
     @Bindable var viewModel: MovieListViewModel
     @Environment(\.dismiss) private var dismiss
+
+    /// Used to offer only the genres the library actually contains.
+    @Query private var allProductions: [Production]
 
     var body: some View {
         NavigationStack {
@@ -33,9 +37,9 @@ struct SearchFilterView: View {
                     ))
                 }
 
-                // Genres
+                // Genres — derived from what's actually in the library
                 Section("Genres") {
-                    ForEach(viewModel.availableGenres, id: \.self) { genre in
+                    ForEach(viewModel.availableGenres(in: allProductions), id: \.self) { genre in
                         Toggle(genre, isOn: Binding(
                             get: { viewModel.filterOptions.selectedGenres.contains(genre) },
                             set: { _ in viewModel.toggleGenre(genre) }

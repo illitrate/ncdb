@@ -355,18 +355,24 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
     // MARK: - Notification Handlers
 
     private func handleAchievementNotification(achievementId: String) {
-        Logger.shared.info("Opening achievement: \(achievementId)", category: .general)
-        // TODO: Navigate to achievement detail view
-        // This will be implemented when we add deep linking
+        Logger.shared.info("Opening achievements from notification: \(achievementId)", category: .general)
+        AppEvents.shared.pendingDeepLink = NCDBDeepLink.achievements
     }
 
     private func handleNewsNotification(articleId: String) {
-        Logger.shared.info("Opening news article: \(articleId)", category: .general)
-        // TODO: Navigate to news article view
+        Logger.shared.info("Opening news from notification: \(articleId)", category: .general)
+        AppEvents.shared.pendingDeepLink = NCDBDeepLink.news
     }
 
     private func handleWatchReminderNotification(movieId: String) {
-        Logger.shared.info("Opening movie detail: \(movieId)", category: .general)
-        // TODO: Navigate to movie detail view
+        Logger.shared.info("Opening film from notification: \(movieId)", category: .general)
+
+        // Reminders carry a Production.id; fall back to the watchlist if it's
+        // not a usable identifier.
+        if let id = UUID(uuidString: movieId), let url = NCDBDeepLink.film(id: id) {
+            AppEvents.shared.pendingDeepLink = url
+        } else {
+            AppEvents.shared.pendingDeepLink = NCDBDeepLink.watchlist
+        }
     }
 }
