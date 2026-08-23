@@ -7,7 +7,7 @@ import SwiftData
 // MARK: - User Preferences
 @Model
 final class UserPreferences {
-    @Attribute(.unique) var id: UUID
+    var id: UUID = UUID()
 
     // TMDb
     var tmdbAPIKey: String?

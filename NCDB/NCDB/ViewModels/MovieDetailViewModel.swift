@@ -62,12 +62,7 @@ final class MovieDetailViewModel {
             watchEvent.rating = currentRating
         }
 
-        production.watchEvents.append(watchEvent)
-
-        // Update production state
-        production.watched = true
-        production.dateWatched = Date()
-        production.watchCount = production.watchEvents.count
+        production.addWatchEvent(watchEvent)
 
         dataManager.saveQuietly()
         HapticManager.shared.success()
@@ -78,14 +73,11 @@ final class MovieDetailViewModel {
 
     /// Unmark as watched (removes the most recent watch event)
     func unmarkAsWatched() {
-        guard !production.watchEvents.isEmpty else { return }
+        guard !production.watchHistory.isEmpty else { return }
 
-        // Remove the most recent watch event
-        production.watchEvents.removeLast()
+        production.removeLastWatchEvent()
 
-        // Update production state
-        production.watchCount = production.watchEvents.count
-        if production.watchEvents.isEmpty {
+        if production.watchHistory.isEmpty {
             production.watched = false
             production.dateWatched = nil
 
@@ -94,7 +86,8 @@ final class MovieDetailViewModel {
             production.ratingIsUserSet = false
             editedRating = 0
         } else {
-            production.dateWatched = production.watchEvents.last?.watchedAt
+            production.dateWatched = production.watchHistory
+                .max { $0.watchedAt < $1.watchedAt }?.watchedAt
         }
 
         dataManager.saveQuietly()

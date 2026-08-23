@@ -124,14 +124,14 @@ struct TagPickerView: View {
     // MARK: - Actions
 
     private func isApplied(_ tag: CustomTag) -> Bool {
-        production.tags.contains { $0.id == tag.id }
+        production.appliedTags.contains { $0.id == tag.id }
     }
 
     private func toggle(_ tag: CustomTag) {
-        if let index = production.tags.firstIndex(where: { $0.id == tag.id }) {
-            production.tags.remove(at: index)
+        if isApplied(tag) {
+            production.removeTag(tag)
         } else {
-            production.tags.append(tag)
+            production.addTag(tag)
         }
 
         save()
@@ -144,7 +144,7 @@ struct TagPickerView: View {
 
         let tag = CustomTag(name: name, colorHex: newTagColor.toHex() ?? "#FFD700")
         modelContext.insert(tag)
-        production.tags.append(tag)
+        production.addTag(tag)
 
         save()
         HapticManager.shared.success()

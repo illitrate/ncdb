@@ -41,10 +41,7 @@ struct MarkFilmWatchedIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog {
         let (title, count) = try IntentStore.withProduction(id: film.id) { production in
             let event = WatchEvent(production: production, watchedAt: Date())
-            production.watchEvents.append(event)
-            production.watched = true
-            production.dateWatched = event.watchedAt
-            production.watchCount = production.watchEvents.count
+            production.addWatchEvent(event)
             return (production.title, production.watchCount)
         }
 

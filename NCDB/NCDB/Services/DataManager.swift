@@ -268,10 +268,7 @@ final class DataManager {
 
         let event = WatchEvent(production: production, watchedAt: date, location: location, notes: notes)
 
-        production.watchEvents.append(event)
-        production.watched = true
-        production.dateWatched = date
-        production.watchCount += 1
+        production.addWatchEvent(event)
 
         try save()
     }

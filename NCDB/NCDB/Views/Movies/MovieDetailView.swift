@@ -172,8 +172,8 @@ struct MovieDetailView: View {
                                 .font(.caption)
                                 .foregroundStyle(Color.tertiaryText)
 
-                            if !production.tags.isEmpty {
-                                TagChipRow(tags: production.tags.sorted { $0.name < $1.name })
+                            if !production.appliedTags.isEmpty {
+                                TagChipRow(tags: production.appliedTags.sorted { $0.name < $1.name })
                                     .padding(.top, Spacing.xxs)
                             }
 
@@ -339,7 +339,7 @@ Spacer(minLength: 0)
                     }
 
                     // Cast
-                    if !production.castMembers.isEmpty {
+                    if !production.cast.isEmpty {
                         Divider()
                             .padding(.vertical, Spacing.sm)
 
@@ -454,9 +454,9 @@ struct CastSection: View {
 
     private var displayedCast: [CastMember] {
         if showAllCast {
-            return production.castMembers.sorted { $0.order < $1.order }
+            return production.cast.sorted { $0.order < $1.order }
         } else {
-            return Array(production.castMembers.sorted { $0.order < $1.order }.prefix(10))
+            return Array(production.cast.sorted { $0.order < $1.order }.prefix(10))
         }
     }
 
@@ -474,13 +474,13 @@ struct CastSection: View {
 
                 Spacer()
 
-                if production.castMembers.count > 10 {
+                if production.cast.count > 10 {
                     Button {
                         withAnimation {
                             showAllCast.toggle()
                         }
                     } label: {
-                        Text(showAllCast ? "Show Less" : "Show All (\(production.castMembers.count))")
+                        Text(showAllCast ? "Show Less" : "Show All (\(production.cast.count))")
                             .font(.caption)
                             .foregroundStyle(.cageGold)
                     }

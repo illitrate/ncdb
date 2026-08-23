@@ -8,14 +8,14 @@ import SwiftUI
 // MARK: - Custom Tag
 @Model
 final class CustomTag {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var colorHex: String // Hex color code
+    var id: UUID = UUID()
+    var name: String = ""
+    var colorHex: String = "#FFD700" // Hex color code
     var icon: String? // SF Symbol name
-    var dateCreated: Date
+    var dateCreated: Date = Date()
 
     // Relationship
-    var productions: [Production] = []
+    var productions: [Production]? = []
 
     init(name: String, colorHex: String = "#FFD700") {
         self.id = UUID()
@@ -34,6 +34,6 @@ extension CustomTag {
 
     /// Number of productions with this tag
     var productionCount: Int {
-        productions.count
+        productions?.count ?? 0
     }
 }

@@ -7,10 +7,10 @@ import SwiftData
 // MARK: - Cast Member
 @Model
 final class CastMember {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var character: String
-    var order: Int // billing order
+    var id: UUID = UUID()
+    var name: String = ""
+    var character: String = ""
+    var order: Int = 0 // billing order
     var profilePath: String? // TMDb profile image
 
     // Relationship

@@ -10,27 +10,42 @@ import SwiftData
 
 // MARK: - Versioned Schema
 
-/// The schema as shipped in NCDB 1.x and 2.0.
+/// The CloudKit-compatible schema.
 ///
-/// When you change a model, add a new `NCDBSchemaVn` below and append it to
-/// `NCDBMigrationPlan.schemas`. Additive changes (a new property with a default,
-/// a new model) are handled by SwiftData's lightweight migration and need no
-/// stage. Renames, type changes and data reshaping need an explicit
-/// `MigrationStage.custom` in `NCDBMigrationPlan.stages`.
-enum NCDBSchemaV1: VersionedSchema {
-    static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
+/// v1 (the pre-2.1 shape) never shipped to anyone, so there is no migration
+/// stage from it — an older store simply fails to open and the recovery screen
+/// offers to set it aside. Once v2 *has* shipped, add `NCDBSchemaV3` alongside
+/// this and append a `MigrationStage` rather than editing it in place.
+///
+/// CloudKit's constraints are what shaped this: no unique attributes, every
+/// non-optional property carries a default, and every relationship is optional
+/// with an explicit inverse.
+enum NCDBSchemaV2: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
 
     static var models: [any PersistentModel.Type] {
+        syncedModels + localModels
+    }
+
+    /// The user's library. Small, precious, and worth syncing.
+    static var syncedModels: [any PersistentModel.Type] {
         [
             Production.self,
             CastMember.self,
             WatchEvent.self,
             ExternalRating.self,
             CustomTag.self,
-            NewsArticle.self,
             Achievement.self,
             UserPreferences.self,
             ExportTemplate.self
+        ]
+    }
+
+    /// Re-fetchable cache. Deliberately not synced — it churns daily, caps at
+    /// 100 rows, and would cost CloudKit quota for no benefit.
+    static var localModels: [any PersistentModel.Type] {
+        [
+            NewsArticle.self
         ]
     }
 }
@@ -39,7 +54,7 @@ enum NCDBSchemaV1: VersionedSchema {
 
 enum NCDBMigrationPlan: SchemaMigrationPlan {
     static var schemas: [any VersionedSchema.Type] {
-        [NCDBSchemaV1.self]
+        [NCDBSchemaV2.self]
     }
 
     static var stages: [MigrationStage] {
@@ -54,36 +69,54 @@ enum NCDBModelContainer {
 
     /// The schema the app is built against.
     static var schema: Schema {
-        Schema(versionedSchema: NCDBSchemaV1.self)
+        Schema(versionedSchema: NCDBSchemaV2.self)
     }
 
     // MARK: Configuration
 
-    /// Whether the store syncs through CloudKit.
+    /// Whether the library syncs through CloudKit.
     ///
-    /// This has to be explicit. `ModelConfiguration`'s `cloudKitDatabase`
-    /// parameter defaults to `.automatic`, which turns sync **on** the moment
-    /// the app carries the CloudKit entitlement — with no code change at all.
-    /// That is not a safe default here: the v1 schema is not CloudKit
-    /// compatible (10 unique attributes, and non-optional properties without
-    /// defaults), so `.automatic` makes the container fail to open outright.
-    ///
-    /// Pinned off until NCDBSchemaV2 lands. Flipping this is the *last* step of
-    /// the sync migration, not the first.
-    static let cloudKitSyncEnabled = false
+    /// `ModelConfiguration`'s `cloudKitDatabase` parameter defaults to
+    /// `.automatic`, which enables sync the moment the app carries the
+    /// entitlement — with no code change at all. Keeping it explicit means
+    /// turning sync on stays a decision rather than a side effect of ticking a
+    /// checkbox in Xcode.
+    static let cloudKitSyncEnabled = true
 
-    static func configuration(inMemory: Bool = false) -> ModelConfiguration {
+    /// The CloudKit container backing the synced store.
+    static let cloudKitContainerIdentifier = "iCloud.illitrate-Publicashions.NCDB"
+
+    /// The user's library — synced.
+    static func libraryConfiguration(inMemory: Bool = false) -> ModelConfiguration {
         ModelConfiguration(
-            schema: schema,
+            "Library",
+            schema: Schema(NCDBSchemaV2.syncedModels, version: NCDBSchemaV2.versionIdentifier),
             isStoredInMemoryOnly: inMemory,
             allowsSave: true,
-            cloudKitDatabase: cloudKitSyncEnabled ? .automatic : .none
+            cloudKitDatabase: cloudKitSyncEnabled && !inMemory
+                ? .private(cloudKitContainerIdentifier)
+                : .none
         )
     }
 
-    /// On-disk location of the store, used by the recovery flow.
+    /// The news cache — local only.
+    static func newsConfiguration(inMemory: Bool = false) -> ModelConfiguration {
+        ModelConfiguration(
+            "News",
+            schema: Schema(NCDBSchemaV2.localModels, version: NCDBSchemaV2.versionIdentifier),
+            isStoredInMemoryOnly: inMemory,
+            allowsSave: true,
+            cloudKitDatabase: .none
+        )
+    }
+
+    static func configuration(inMemory: Bool = false) -> ModelConfiguration {
+        libraryConfiguration(inMemory: inMemory)
+    }
+
+    /// On-disk location of the library store, used by the recovery flow.
     static var storeURL: URL {
-        configuration().url
+        libraryConfiguration().url
     }
 
     /// The store file plus its write-ahead log siblings.
@@ -98,22 +131,34 @@ enum NCDBModelContainer {
 
     // MARK: Loading
 
-    /// Open the persistent store, running the migration plan.
-    /// - Throws: the underlying SwiftData error if the store cannot be opened.
+    /// Open both stores, running the migration plan.
     static func load(inMemory: Bool = false) throws -> ModelContainer {
         let container = try ModelContainer(
             for: schema,
             migrationPlan: NCDBMigrationPlan.self,
-            configurations: [configuration(inMemory: inMemory)]
+            configurations: [
+                libraryConfiguration(inMemory: inMemory),
+                newsConfiguration(inMemory: inMemory)
+            ]
         )
-        Logger.shared.info("Model container opened (schema \(NCDBSchemaV1.versionIdentifier))", category: .database)
+
+        Logger.shared.info(
+            "Model container opened (schema \(NCDBSchemaV2.versionIdentifier), CloudKit \(cloudKitSyncEnabled ? "on" : "off"))",
+            category: .database
+        )
         return container
     }
 
     /// A throwaway in-memory container, so the recovery UI and previews can run
     /// even when the real store is unreadable. Nothing written here is persisted.
     static func ephemeral() -> ModelContainer? {
-        try? ModelContainer(for: schema, configurations: [configuration(inMemory: true)])
+        try? ModelContainer(
+            for: schema,
+            configurations: [
+                libraryConfiguration(inMemory: true),
+                newsConfiguration(inMemory: true)
+            ]
+        )
     }
 
     // MARK: Recovery

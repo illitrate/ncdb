@@ -7,9 +7,9 @@ import SwiftData
 // MARK: - Achievement
 @Model
 final class Achievement {
-    @Attribute(.unique) var id: UUID
-    var achievementID: String  // References AchievementDefinition.id
-    var unlockedAt: Date
+    var id: UUID = UUID()
+    var achievementID: String = ""  // References AchievementDefinition.id
+    var unlockedAt: Date = Date()
 
     init(
         achievementID: String,

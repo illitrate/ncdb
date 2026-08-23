@@ -302,7 +302,7 @@ final class SettingsViewModel {
                     }
 
                     // Clear and repopulate cast members
-                    production.castMembers.removeAll()
+                    var refreshedCast: [CastMember] = []
                     if let cast = details.credits?.cast {
                         for castMember in cast.prefix(50) { // Limit to top 50
                             let member = CastMember(
@@ -311,9 +311,10 @@ final class SettingsViewModel {
                                 profilePath: castMember.profilePath,
                                 order: castMember.order
                             )
-                            production.castMembers.append(member)
+                            refreshedCast.append(member)
                         }
                     }
+                    production.castMembers = refreshedCast
 
                     production.metadataFetched = true
                     production.lastUpdated = Date()

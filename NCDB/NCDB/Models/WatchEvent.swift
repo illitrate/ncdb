@@ -7,10 +7,10 @@ import SwiftData
 // MARK: - Watch Event
 @Model
 final class WatchEvent {
-    @Attribute(.unique) var id: UUID
-    var watchedAt: Date
+    var id: UUID = UUID()
+    var watchedAt: Date = Date()
     var location: String?
-    var companions: [String]
+    var companions: [String] = []
     var mood: String?
     var notes: String?
     var rating: Double?

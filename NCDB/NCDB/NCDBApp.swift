@@ -11,6 +11,9 @@ struct NCDBApp: App {
 
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
+    /// Watches for CloudKit merges landing in the store.
+    private let remoteChangeObserver = RemoteChangeObserver()
+
     // MARK: - Model Container
 
     /// Result of opening the persistent store. A failure surfaces the recovery
@@ -78,6 +81,26 @@ struct NCDBApp: App {
         configureBackgroundTasks(container: container)
         configureAchievementTracking()
         configureNewsRefresh(container: container)
+        configureRankingReconciliation(container: container)
+    }
+
+    // MARK: - Ranking Reconciliation
+
+    /// Repair ranking positions after CloudKit merges.
+    ///
+    /// Per-property last-writer-wins can leave the ranked list with duplicate
+    /// or gapped positions — see RankingReconciler. Run once at launch, then
+    /// whenever remote changes arrive.
+    private func configureRankingReconciliation(container: ModelContainer) {
+        let context = container.mainContext
+
+        Task { @MainActor in
+            if RankingReconciler.needsReconciliation(in: context) {
+                RankingReconciler.reconcile(in: context)
+            }
+        }
+
+        remoteChangeObserver.start(context: context)
     }
 
     // MARK: - Background Tasks
