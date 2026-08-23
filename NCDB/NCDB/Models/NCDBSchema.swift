@@ -59,11 +59,25 @@ enum NCDBModelContainer {
 
     // MARK: Configuration
 
+    /// Whether the store syncs through CloudKit.
+    ///
+    /// This has to be explicit. `ModelConfiguration`'s `cloudKitDatabase`
+    /// parameter defaults to `.automatic`, which turns sync **on** the moment
+    /// the app carries the CloudKit entitlement — with no code change at all.
+    /// That is not a safe default here: the v1 schema is not CloudKit
+    /// compatible (10 unique attributes, and non-optional properties without
+    /// defaults), so `.automatic` makes the container fail to open outright.
+    ///
+    /// Pinned off until NCDBSchemaV2 lands. Flipping this is the *last* step of
+    /// the sync migration, not the first.
+    static let cloudKitSyncEnabled = false
+
     static func configuration(inMemory: Bool = false) -> ModelConfiguration {
         ModelConfiguration(
             schema: schema,
             isStoredInMemoryOnly: inMemory,
-            allowsSave: true
+            allowsSave: true,
+            cloudKitDatabase: cloudKitSyncEnabled ? .automatic : .none
         )
     }
 
