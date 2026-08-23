@@ -7,10 +7,10 @@ import SwiftData
 // MARK: - External Rating
 @Model
 final class ExternalRating {
-    @Attribute(.unique) var id: UUID
-    var source: RatingSource
-    var rating: Double
-    var maxRating: Double
+    var id: UUID = UUID()
+    var source: RatingSource = RatingSource.imdb
+    var rating: Double = 0
+    var maxRating: Double = 10
     var reviewCount: Int?
     var url: String?
 

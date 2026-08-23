@@ -56,6 +56,32 @@ struct RankingCarousel: View {
                                     perspective: 0.6
                                 )
                                 .zIndex(1.0 - abs(normalizedOffset))
+                                // Drag-to-reorder is unreachable with VoiceOver,
+                                // so expose the same operations as custom actions.
+                                .accessibilityElement(children: .combine)
+                                .accessibilityLabel("Number \(currentIndex + 1), \(movie.title), \(movie.releaseYear)")
+                                .accessibilityHint("Opens film details")
+                                .accessibilityActions {
+                                    if currentIndex > 0 {
+                                        Button("Move up") {
+                                            viewModel.reorderMovie(movie, to: currentIndex - 1)
+                                        }
+
+                                        Button("Move to top") {
+                                            viewModel.reorderMovie(movie, to: 0)
+                                        }
+                                    }
+
+                                    if currentIndex < viewModel.rankedMovies.count - 1 {
+                                        Button("Move down") {
+                                            viewModel.reorderMovie(movie, to: currentIndex + 1)
+                                        }
+                                    }
+
+                                    Button("Remove from rankings") {
+                                        viewModel.removeFromRankings(movie)
+                                    }
+                                }
                             }
                             .frame(width: 360, height: 840)
                             .id(movie.id)

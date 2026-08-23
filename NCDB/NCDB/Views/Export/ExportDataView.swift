@@ -194,6 +194,9 @@ struct ExportDataView: View {
             exportedFileURL = fileURL
             showShareSheet = true
 
+            // Unlocks the "data_export" achievement, which had no trigger before.
+            AppEvents.shared.dataExported()
+
             HapticManager.shared.success()
             Logger.shared.info("Export successful: \(fileURL.lastPathComponent)", category: .general)
 

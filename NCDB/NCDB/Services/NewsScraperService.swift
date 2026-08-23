@@ -8,7 +8,12 @@
 import Foundation
 import SwiftData
 
-/// Service for scraping and parsing Nicolas Cage news from various sources
+/// Fetches and parses Nicolas Cage news from RSS sources.
+///
+/// Feed download, XML parsing and relevance scoring all happen off the main
+/// actor and produce plain `ParsedArticle` values. `NewsArticle` models are only
+/// created at the end, on the main actor, where the model context lives — a
+/// `PersistentModel` must never cross a task boundary.
 @MainActor
 final class NewsScraperService {
     static let shared = NewsScraperService()
@@ -17,7 +22,7 @@ final class NewsScraperService {
 
     // MARK: - News Sources
 
-    private let newsSources: [NewsSourceConfig] = [
+    nonisolated static let newsSources: [NewsSourceConfig] = [
         // Priority sources (checked first, displayed first)
         NewsSourceConfig(
             name: "The Hollywood Reporter",
@@ -73,141 +78,148 @@ final class NewsScraperService {
 
     // MARK: - Scraping
 
-    /// Fetch news from all sources
+    /// Fetch every source, score for relevance, and merge into the store.
+    ///
+    /// Returns the articles that are new to this device.
+    @discardableResult
     func fetchAllNews(modelContext: ModelContext) async -> [NewsArticle] {
-        Logger.shared.info("Fetching news from \(newsSources.count) sources...", category: .general)
+        Logger.shared.info("Fetching news from \(Self.newsSources.count) sources...", category: .general)
 
-        var allArticles: [NewsArticle] = []
+        // Network + XML parsing, entirely off the main actor.
+        let parsed = await Self.fetchAndParseAllSources()
 
-        await withTaskGroup(of: [NewsArticle].self) { group in
-            for source in newsSources {
-                group.addTask {
-                    await self.fetchNews(from: source)
-                }
-            }
+        // Pure scoring pass — filters out anything that isn't really about Cage.
+        let scored = NewsFilterService.shared.scoreAndFilter(parsed)
 
-            for await articles in group {
-                allArticles.append(contentsOf: articles)
-            }
-        }
+        Logger.shared.info("\(scored.count) of \(parsed.count) articles are relevant", category: .general)
 
-        // Filter for relevance
-        let relevantArticles = NewsFilterService.shared.filterRelevantArticles(allArticles)
+        let inserted = merge(scored, into: modelContext)
 
-        // Sort by source priority (lower priority number = shown first)
-        let sortedArticles = relevantArticles.sorted { article1, article2 in
-            let priority1 = sourcePriority(for: article1.source)
-            let priority2 = sourcePriority(for: article2.source)
+        // Refine categories on device where Apple Intelligence is available.
+        // Runs after the merge so the feed appears immediately either way.
+        await refineCategories(for: inserted, in: modelContext)
 
-            if priority1 != priority2 {
-                return priority1 < priority2
-            } else {
-                // Within same source, sort by date (newest first)
-                return article1.publishedDate > article2.publishedDate
-            }
-        }
+        return inserted
+    }
 
-        Logger.shared.info("Fetched \(sortedArticles.count) relevant articles", category: .general)
+    /// Upgrade keyword-guessed categories using the on-device model.
+    ///
+    /// Best effort: if the model isn't available, the keyword categories that
+    /// `merge` already applied simply stand.
+    private func refineCategories(for articles: [NewsArticle], in modelContext: ModelContext) async {
+        guard CageIntelligence.shared.isAvailable, !articles.isEmpty else { return }
 
-        // Save to database
-        for article in sortedArticles {
-            modelContext.insert(article)
+        // Only the newest few — this is a nicety, not worth a long stall.
+        for article in articles.prefix(10) {
+            let category = await CageIntelligence.shared.categorise(
+                title: article.title,
+                summary: article.summary
+            )
+            article.category = category
         }
 
         try? modelContext.save()
-
-        return sortedArticles
+        Logger.shared.debug("Refined categories for \(min(articles.count, 10)) articles", category: .news)
     }
 
-    /// Get priority for a source by name
-    private func sourcePriority(for sourceName: String) -> Int {
-        newsSources.first { $0.name == sourceName }?.priority ?? 999
+    /// Insert genuinely new articles and refresh derived fields on existing ones.
+    ///
+    /// Existing rows are updated in place rather than re-inserted, so the user's
+    /// read and favourite flags survive a refresh.
+    private func merge(_ scored: [ScoredArticle], into modelContext: ModelContext) -> [NewsArticle] {
+        let existing = (try? modelContext.fetch(FetchDescriptor<NewsArticle>())) ?? []
+        var byURL = Dictionary(existing.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
+
+        var inserted: [NewsArticle] = []
+
+        for item in scored {
+            if let existingArticle = byURL[item.parsed.url] {
+                // Keep derived metadata current without touching user state.
+                existingArticle.relevanceScore = item.normalizedScore
+                existingArticle.category = item.category
+                continue
+            }
+
+            let article = NewsArticle(
+                url: item.parsed.url,
+                title: item.parsed.title,
+                summary: item.parsed.summary,
+                source: item.parsed.source,
+                publishedDate: item.parsed.publishedDate
+            )
+            article.relevanceScore = item.normalizedScore
+            article.category = item.category
+
+            modelContext.insert(article)
+            byURL[item.parsed.url] = article
+            inserted.append(article)
+        }
+
+        do {
+            try modelContext.save()
+        } catch {
+            Logger.shared.error("Failed to save news articles: \(error)", category: .database)
+        }
+
+        Logger.shared.info("Merged news: \(inserted.count) new, \(scored.count - inserted.count) already known", category: .general)
+        return inserted
     }
 
-    /// Fetch news from a specific source
-    private func fetchNews(from source: NewsSourceConfig) async -> [NewsArticle] {
-        Logger.shared.info("Fetching from \(source.name)...", category: .general)
+    // MARK: - Off-Actor Fetching
 
+    /// Download and parse every configured source concurrently.
+    nonisolated static func fetchAndParseAllSources() async -> [ParsedArticle] {
+        await withTaskGroup(of: [ParsedArticle].self) { group in
+            for source in newsSources {
+                group.addTask {
+                    await fetchAndParse(source)
+                }
+            }
+
+            var all: [ParsedArticle] = []
+            for await articles in group {
+                all.append(contentsOf: articles)
+            }
+            return all
+        }
+    }
+
+    /// Download and parse one feed. Never throws — a dead feed shouldn't take
+    /// the others down with it.
+    nonisolated static func fetchAndParse(_ source: NewsSourceConfig) async -> [ParsedArticle] {
         guard let feedURL = URL(string: source.url) else {
             Logger.shared.error("Invalid feed URL: \(source.url)", category: .general)
             return []
         }
 
         do {
-            let (data, _) = try await URLSession.shared.data(from: feedURL)
-            let parser = SimpleRSSParser(data: data, source: source)
+            let (data, response) = try await URLSession.shared.data(from: feedURL)
+
+            if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+                Logger.shared.warning("\(source.name) returned HTTP \(http.statusCode)", category: .general)
+                return []
+            }
+
+            let parser = RSSFeedParser(data: data, source: source)
             let articles = parser.parse()
-            Logger.shared.info("Parsed \(articles.count) articles from \(source.name)", category: .general)
+            Logger.shared.debug("Parsed \(articles.count) articles from \(source.name)", category: .general)
             return articles
         } catch {
-            Logger.shared.error("Failed to fetch feed from \(source.name): \(error)", category: .general)
+            Logger.shared.error("Failed to fetch \(source.name): \(error.localizedDescription)", category: .general)
             return []
         }
     }
 
-    // MARK: - Keyword Filtering
-
-    private func containsRelevantKeywords(_ text: String, keywords: [String]) -> Bool {
-        let lowercasedText = text.lowercased()
-        return keywords.contains { keyword in
-            lowercasedText.contains(keyword.lowercased())
-        }
-    }
-
-    // MARK: - HTML Stripping
-
-    private func stripHTML(_ html: String) -> String {
-        guard !html.isEmpty else { return "" }
-
-        // Remove HTML tags
-        var result = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
-
-        // Decode common HTML entities
-        result = result.replacingOccurrences(of: "&nbsp;", with: " ")
-        result = result.replacingOccurrences(of: "&amp;", with: "&")
-        result = result.replacingOccurrences(of: "&lt;", with: "<")
-        result = result.replacingOccurrences(of: "&gt;", with: ">")
-        result = result.replacingOccurrences(of: "&quot;", with: "\"")
-        result = result.replacingOccurrences(of: "&#39;", with: "'")
-        result = result.replacingOccurrences(of: "&apos;", with: "'")
-        result = result.replacingOccurrences(of: "&rsquo;", with: "'")
-        result = result.replacingOccurrences(of: "&lsquo;", with: "'")
-        result = result.replacingOccurrences(of: "&rdquo;", with: "\"")
-        result = result.replacingOccurrences(of: "&ldquo;", with: "\"")
-        result = result.replacingOccurrences(of: "&mdash;", with: "—")
-        result = result.replacingOccurrences(of: "&ndash;", with: "–")
-        result = result.replacingOccurrences(of: "&hellip;", with: "…")
-
-        // Decode numeric HTML entities (e.g., &#8217;)
-        result = result.replacingOccurrences(
-            of: "&#(\\d+);",
-            with: "",
-            options: .regularExpression
-        )
-
-        // Clean up extra whitespace
-        result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        // If after stripping we're left with just "Read Full Article" or similar noise, return empty
-        let lowercased = result.lowercased()
-        if lowercased == "read full article" || lowercased.isEmpty {
-            return ""
-        }
-
-        return result
-    }
-
     // MARK: - Supporting Types
 
-    struct NewsSourceConfig {
+    struct NewsSourceConfig: Sendable {
         let name: String
         let url: String
         let type: SourceType
         let keywords: [String]
         let priority: Int // Lower number = higher priority (displayed first)
 
-        enum SourceType {
+        enum SourceType: Sendable {
             case rss
             case atom
             case json
@@ -215,13 +227,43 @@ final class NewsScraperService {
     }
 }
 
-// MARK: - Simple RSS Parser
+// MARK: - Parsed Article
 
-/// Simple RSS feed parser using XMLParser
-private class SimpleRSSParser: NSObject, XMLParserDelegate {
+/// A feed item as parsed from XML: plain values only, safe to move between tasks.
+struct ParsedArticle: Sendable, Hashable {
+    let url: String
+    let title: String
+    let summary: String?
+    let source: String
+    let publishedDate: Date
+}
+
+/// A parsed article with its relevance score and inferred category.
+struct ScoredArticle: Sendable {
+    let parsed: ParsedArticle
+    /// Ordering score: content relevance plus a recency nudge.
+    let score: Int
+    /// Content relevance alone — this is what decides whether to keep the article.
+    let keywordScore: Int
+    let category: ArticleCategory
+
+    /// Raw score mapped onto the 0–1 range `NewsArticle.relevanceScore` documents.
+    var normalizedScore: Double {
+        min(1.0, Double(score) / 10.0)
+    }
+}
+
+// MARK: - RSS Parser
+
+/// RSS feed parser. Produces plain values, so it can run anywhere.
+///
+/// Explicitly nonisolated — feed parsing is the work we moved off the main
+/// actor, so it must not inherit main-actor isolation from the module default.
+nonisolated final class RSSFeedParser: NSObject, XMLParserDelegate {
+
     private let data: Data
     private let source: NewsScraperService.NewsSourceConfig
-    private var articles: [NewsArticle] = []
+    private var articles: [ParsedArticle] = []
 
     // Current element tracking
     private var currentElement = ""
@@ -229,27 +271,39 @@ private class SimpleRSSParser: NSObject, XMLParserDelegate {
     private var currentLink = ""
     private var currentDescription = ""
     private var currentPubDate = ""
+    private var totalItems = 0
+
+    /// RFC 822, as used by every feed NCDB reads.
+    private let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        return formatter
+    }()
 
     init(data: Data, source: NewsScraperService.NewsSourceConfig) {
         self.data = data
         self.source = source
     }
 
-    func parse() -> [NewsArticle] {
+    func parse() -> [ParsedArticle] {
         let parser = XMLParser(data: data)
         parser.delegate = self
         parser.parse()
 
-        Logger.shared.debug("RSS Parser for \(source.name): Found \(totalItems) items, \(articles.count) matched keywords", category: .general)
-
+        Logger.shared.debug("\(source.name): \(totalItems) items, \(articles.count) matched", category: .general)
         return articles
     }
 
-    private var totalItems = 0
-
     // MARK: - XMLParserDelegate
 
-    func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?, qualifiedName qName: String?, attributes attributeDict: [String : String] = [:]) {
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String] = [:]
+    ) {
         currentElement = elementName
 
         if elementName == "item" {
@@ -265,109 +319,76 @@ private class SimpleRSSParser: NSObject, XMLParserDelegate {
         guard !trimmed.isEmpty else { return }
 
         switch currentElement {
-        case "title":
-            currentTitle += trimmed
-        case "link":
-            currentLink += trimmed
-        case "description":
-            currentDescription += trimmed
-        case "pubDate":
-            currentPubDate += trimmed
-        default:
-            break
+        case "title": currentTitle += trimmed
+        case "link": currentLink += trimmed
+        case "description": currentDescription += trimmed
+        case "pubDate": currentPubDate += trimmed
+        default: break
         }
     }
 
-    func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
-        if elementName == "item" {
-            totalItems += 1
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?
+    ) {
+        guard elementName == "item" else { return }
 
-            // Log first 3 items for debugging
-            if totalItems <= 3 {
-                Logger.shared.debug("[\(source.name)] Item \(totalItems): \(currentTitle)", category: .general)
-            }
+        totalItems += 1
 
-            // Check if article is relevant
-            let isRelevant: Bool
-            if source.keywords.isEmpty {
-                // No filtering needed (e.g., Google News search already filtered)
-                isRelevant = true
-            } else {
-                let content = "\(currentTitle) \(currentDescription)"
-                let lowercased = content.lowercased()
-                isRelevant = source.keywords.contains { keyword in
-                    lowercased.contains(keyword.lowercased())
-                }
-            }
+        // Sources that pre-filter (a Google News search for "Nicolas Cage")
+        // carry no keywords and are taken as-is.
+        let isRelevant: Bool
+        if source.keywords.isEmpty {
+            isRelevant = true
+        } else {
+            let content = "\(currentTitle) \(currentDescription)".lowercased()
+            isRelevant = source.keywords.contains { content.contains($0.lowercased()) }
+        }
 
-            guard isRelevant, !currentTitle.isEmpty, !currentLink.isEmpty else {
-                return
-            }
+        guard isRelevant, !currentTitle.isEmpty, !currentLink.isEmpty else { return }
 
-            Logger.shared.debug("[\(source.name)] MATCH: \(currentTitle)", category: .general)
+        let publishedDate = dateFormatter.date(from: currentPubDate) ?? Date()
+        let summary = Self.stripHTML(currentDescription)
 
-            // Parse date
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss Z"
-            dateFormatter.locale = Locale(identifier: "en_US_POSIX")
-            let pubDate = dateFormatter.date(from: currentPubDate) ?? Date()
-
-            // Clean up description (strip HTML tags, especially for Google News)
-            let cleanDescription = stripHTML(currentDescription)
-
-            let article = NewsArticle(
+        articles.append(
+            ParsedArticle(
                 url: currentLink,
                 title: currentTitle,
-                summary: cleanDescription.isEmpty ? nil : cleanDescription,
+                summary: summary.isEmpty ? nil : summary,
                 source: source.name,
-                publishedDate: pubDate
+                publishedDate: publishedDate
             )
-
-            articles.append(article)
-        }
+        )
     }
 
     // MARK: - HTML Stripping
 
-    private func stripHTML(_ html: String) -> String {
+    /// Strip tags and decode the entities that show up in feed summaries.
+    static func stripHTML(_ html: String) -> String {
         guard !html.isEmpty else { return "" }
 
-        // Remove HTML tags
         var result = html.replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
 
-        // Decode common HTML entities
-        result = result.replacingOccurrences(of: "&nbsp;", with: " ")
-        result = result.replacingOccurrences(of: "&amp;", with: "&")
-        result = result.replacingOccurrences(of: "&lt;", with: "<")
-        result = result.replacingOccurrences(of: "&gt;", with: ">")
-        result = result.replacingOccurrences(of: "&quot;", with: "\"")
-        result = result.replacingOccurrences(of: "&#39;", with: "'")
-        result = result.replacingOccurrences(of: "&apos;", with: "'")
-        result = result.replacingOccurrences(of: "&rsquo;", with: "'")
-        result = result.replacingOccurrences(of: "&lsquo;", with: "'")
-        result = result.replacingOccurrences(of: "&rdquo;", with: "\"")
-        result = result.replacingOccurrences(of: "&ldquo;", with: "\"")
-        result = result.replacingOccurrences(of: "&mdash;", with: "—")
-        result = result.replacingOccurrences(of: "&ndash;", with: "–")
-        result = result.replacingOccurrences(of: "&hellip;", with: "…")
+        let entities: [String: String] = [
+            "&nbsp;": " ", "&amp;": "&", "&lt;": "<", "&gt;": ">",
+            "&quot;": "\"", "&#39;": "'", "&apos;": "'",
+            "&rsquo;": "\u{2019}", "&lsquo;": "\u{2018}",
+            "&rdquo;": "\u{201D}", "&ldquo;": "\u{201C}",
+            "&mdash;": "\u{2014}", "&ndash;": "\u{2013}", "&hellip;": "\u{2026}"
+        ]
+        for (entity, replacement) in entities {
+            result = result.replacingOccurrences(of: entity, with: replacement)
+        }
 
-        // Decode numeric HTML entities (e.g., &#8217;)
-        result = result.replacingOccurrences(
-            of: "&#(\\d+);",
-            with: "",
-            options: .regularExpression
-        )
+        // Remaining numeric entities.
+        result = result.replacingOccurrences(of: "&#(\\d+);", with: "", options: .regularExpression)
 
-        // Clean up extra whitespace
         result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         result = result.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        // If after stripping we're left with just "Read Full Article" or similar noise, return empty
-        let lowercased = result.lowercased()
-        if lowercased == "read full article" || lowercased.isEmpty {
-            return ""
-        }
-
-        return result
+        // Feeds that give nothing but a call to action are treated as empty.
+        return result.lowercased() == "read full article" ? "" : result
     }
 }

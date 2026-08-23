@@ -16,63 +16,61 @@ struct WatchCalendarView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: Spacing.lg) {
-                    // Year picker
-                    HStack {
-                        Button {
-                            selectedYear -= 1
-                        } label: {
-                            Image(systemName: "chevron.left")
-                        }
-
-                        Text(String(selectedYear))
-                            .font(.headline)
-                            .frame(minWidth: 80)
-
-                        Button {
-                            selectedYear += 1
-                        } label: {
-                            Image(systemName: "chevron.right")
-                        }
-                        .disabled(selectedYear >= calendar.component(.year, from: Date()))
-                    }
-                    .padding(Spacing.md)
-
-                    // Calendar grid
-                    ForEach(1...12, id: \.self) { month in
-                        MonthView(
-                            year: selectedYear,
-                            month: month,
-                            watchEventsByDate: watchEventsByDate
-                        )
+        ScrollView {
+            VStack(spacing: Spacing.lg) {
+                // Year picker
+                HStack {
+                    Button {
+                        selectedYear -= 1
+                    } label: {
+                        Image(systemName: "chevron.left")
                     }
 
-                    // Legend
-                    HStack(spacing: Spacing.md) {
-                        Text("Less")
-                            .font(.caption)
-                            .foregroundStyle(Color.tertiaryText)
+                    Text(String(selectedYear))
+                        .font(.headline)
+                        .frame(minWidth: 80)
 
-                        ForEach(0...4, id: \.self) { intensity in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(heatMapColor(intensity: intensity))
-                                .frame(width: 12, height: 12)
-                        }
-
-                        Text("More")
-                            .font(.caption)
-                            .foregroundStyle(Color.tertiaryText)
+                    Button {
+                        selectedYear += 1
+                    } label: {
+                        Image(systemName: "chevron.right")
                     }
-                    .padding(Spacing.md)
+                    .disabled(selectedYear >= calendar.component(.year, from: Date()))
                 }
+                .padding(Spacing.md)
+
+                // Calendar grid
+                ForEach(1...12, id: \.self) { month in
+                    MonthView(
+                        year: selectedYear,
+                        month: month,
+                        watchEventsByDate: watchEventsByDate
+                    )
+                }
+
+                // Legend
+                HStack(spacing: Spacing.md) {
+                    Text("Less")
+                        .font(.caption)
+                        .foregroundStyle(Color.tertiaryText)
+
+                    ForEach(0...4, id: \.self) { intensity in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(heatMapColor(intensity: intensity))
+                            .frame(width: 12, height: 12)
+                    }
+
+                    Text("More")
+                        .font(.caption)
+                        .foregroundStyle(Color.tertiaryText)
+                }
+                .padding(Spacing.md)
             }
-            .background(Color.primaryBackground)
-            .navigationTitle("Watch Calendar")
-            .onAppear {
-                loadWatchEvents()
-            }
+        }
+        .background(Color.primaryBackground)
+        .navigationTitle("Watch Calendar")
+        .onAppear {
+            loadWatchEvents()
         }
     }
 

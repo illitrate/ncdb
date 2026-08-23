@@ -31,6 +31,9 @@ final class SettingsViewModel {
     var isSyncing = false
     var syncProgress: Double = 0
 
+    /// What the sync is currently doing, shown beside the progress indicator.
+    var syncStatusMessage = ""
+
     /// Last sync date - persisted in UserDefaults
     private let lastSyncDateKey = "lastTMDbSyncDate"
     var lastSyncDate: Date? {
@@ -48,11 +51,11 @@ final class SettingsViewModel {
 
     /// App info
     var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.0"
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—"
     }
 
     var buildNumber: String {
-        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "10"
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "—"
     }
 
     /// Preferences
@@ -71,18 +74,18 @@ final class SettingsViewModel {
         set { NotificationManager.shared.achievementNotificationsEnabled = newValue }
     }
 
-    /// Content filtering preferences
-    private let hideNonActingKey = "hideNonActingAppearances"
-    private let hideDocumentariesKey = "hideDocumentaries"
+    /// Content filtering preferences. Backed by ContentFilterSettings so every
+    /// screen observes the same value and updates when it changes.
+    private let contentFilter = ContentFilterSettings.shared
 
     var hideNonActingAppearances: Bool {
-        get { UserDefaults.standard.bool(forKey: hideNonActingKey) }
-        set { UserDefaults.standard.set(newValue, forKey: hideNonActingKey) }
+        get { contentFilter.hideNonActingAppearances }
+        set { contentFilter.hideNonActingAppearances = newValue }
     }
 
     var hideDocumentaries: Bool {
-        get { UserDefaults.standard.bool(forKey: hideDocumentariesKey) }
-        set { UserDefaults.standard.set(newValue, forKey: hideDocumentariesKey) }
+        get { contentFilter.hideDocumentaries }
+        set { contentFilter.hideDocumentaries = newValue }
     }
 
     /// Services
@@ -94,9 +97,6 @@ final class SettingsViewModel {
     // MARK: - Initialization
 
     init() {
-        // Register default values for UserDefaults
-        registerDefaults()
-
         loadAPIKey()
         // Initialize TMDbService if API key exists
         if let savedKey = keychainHelper.getTMDbAPIKey() {
@@ -106,15 +106,6 @@ final class SettingsViewModel {
             await loadCacheSize()
         }
         startTimeUpdateTimer()
-    }
-
-    /// Register default values for UserDefaults
-    private func registerDefaults() {
-        let defaults: [String: Any] = [
-            hideNonActingKey: true,
-            hideDocumentariesKey: true
-        ]
-        UserDefaults.standard.register(defaults: defaults)
     }
 
     /// Start timer to update relative time display
@@ -275,15 +266,39 @@ final class SettingsViewModel {
         syncProgress = 0
 
         do {
-            // Get all productions from database
-            Logger.shared.info("Starting TMDb sync for extended details", category: .tmdb)
-            let productions = try await dataManager.fetchAllProductions()
+            Logger.shared.info("Starting TMDb sync", category: .tmdb)
+            var productions = try dataManager.fetchAllProductions()
 
-            guard !productions.isEmpty else {
-                Logger.shared.warning("No movies in database to sync", category: .tmdb)
-                isSyncing = false
-                return
+            // An empty library isn't an error — it's the case that most needs
+            // fixing. Import the filmography first, then enrich it. This is the
+            // only route back for anyone who cleared their data, reset the app,
+            // or is setting up a device CloudKit hasn't populated yet.
+            if productions.isEmpty {
+                guard let context = dataManager.modelContext else {
+                    Logger.shared.error("No model context available for import", category: .tmdb)
+                    isSyncing = false
+                    return
+                }
+
+                Logger.shared.info("Library is empty — importing filmography first", category: .tmdb)
+                syncStatusMessage = "Importing filmography…"
+
+                let imported = try await FilmographyImporter.importFilmography(
+                    apiKey: apiKey,
+                    modelContext: context
+                )
+
+                Logger.shared.info("Imported \(imported) films", category: .tmdb)
+                productions = try dataManager.fetchAllProductions()
+
+                guard !productions.isEmpty else {
+                    Logger.shared.warning("TMDb returned no films for this account", category: .tmdb)
+                    isSyncing = false
+                    return
+                }
             }
+
+            syncStatusMessage = "Fetching details…"
 
             Logger.shared.info("Syncing details for \(productions.count) movies", category: .tmdb)
 
@@ -314,7 +329,7 @@ final class SettingsViewModel {
                     }
 
                     // Clear and repopulate cast members
-                    production.castMembers.removeAll()
+                    var refreshedCast: [CastMember] = []
                     if let cast = details.credits?.cast {
                         for castMember in cast.prefix(50) { // Limit to top 50
                             let member = CastMember(
@@ -323,9 +338,10 @@ final class SettingsViewModel {
                                 profilePath: castMember.profilePath,
                                 order: castMember.order
                             )
-                            production.castMembers.append(member)
+                            refreshedCast.append(member)
                         }
                     }
+                    production.castMembers = refreshedCast
 
                     production.metadataFetched = true
                     production.lastUpdated = Date()
@@ -346,7 +362,7 @@ final class SettingsViewModel {
             }
 
             // Save all changes
-            try await dataManager.save()
+            try dataManager.save()
 
             syncProgress = 1.0
             lastSyncDate = Date()
@@ -364,25 +380,9 @@ final class SettingsViewModel {
 
     // MARK: - Data Management
 
-    /// Export all data
-    func exportData() async throws -> URL {
-        // This would create a JSON export of all user data
-        // For now, return a placeholder
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("ncdb_export.json")
-        try "{}".write(to: tempURL, atomically: true, encoding: .utf8)
-        return tempURL
-    }
-
-    /// Factory reset
-    func factoryReset() async {
-        // Clear all data
-        // This would need to be implemented in DataManager
-        await clearCache()
-        removeAPIKey()
-
-        HapticManager.shared.warning()
-        Logger.shared.warning("Factory reset completed", category: .general)
-    }
+    // Data export lives in ExportService (reached via ExportDataView); a full
+    // reset lives in SettingsView.resetAppData(). Both previously had stub
+    // duplicates here that wrote "{}" and skipped the database respectively.
 
     // MARK: - Computed Properties
 
@@ -411,8 +411,11 @@ final class SettingsViewModel {
         return date.formatted(as: .relative)
     }
 
-    /// Full version string
+    /// Version and build, e.g. "2.0 (12)".
+    ///
+    /// Deliberately without a "Version" prefix — the About screen adds its own,
+    /// which is why it read "Version Version 1.0 (11)".
     var fullVersionString: String {
-        "Version \(appVersion) (\(buildNumber))"
+        "\(appVersion) (\(buildNumber))"
     }
 }

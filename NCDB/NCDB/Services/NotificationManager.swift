@@ -83,11 +83,46 @@ final class NotificationManager: NSObject {
         authorizationStatus == .authorized || authorizationStatus == .provisional
     }
 
+    /// Ensure we have permission, asking for it the first time it's needed.
+    ///
+    /// Nothing in 1.x ever called `requestAuthorization` except the News
+    /// Settings toggle, so a user who never opened that screen had achievement
+    /// notifications enabled by default and silently never received one.
+    @discardableResult
+    func ensureAuthorized() async -> Bool {
+        await checkAuthorizationStatus()
+
+        switch authorizationStatus {
+        case .notDetermined:
+            return await requestAuthorization()
+        case .denied:
+            return false
+        default:
+            return true
+        }
+    }
+
     // MARK: - Schedule Notifications
 
-    /// Schedule an achievement unlock notification
+    /// Schedule an achievement unlock notification.
+    ///
+    /// Asks for permission on the first unlock rather than up front — the user
+    /// has just earned something, which is the moment the prompt makes sense.
     func scheduleAchievementNotification(title: String, description: String, achievementId: String) {
-        guard notificationsEnabled, achievementNotificationsEnabled, isAuthorized else { return }
+        guard notificationsEnabled, achievementNotificationsEnabled else { return }
+
+        guard isAuthorized else {
+            Task { @MainActor in
+                if await ensureAuthorized() {
+                    scheduleAchievementNotification(
+                        title: title,
+                        description: description,
+                        achievementId: achievementId
+                    )
+                }
+            }
+            return
+        }
 
         let content = UNMutableNotificationContent()
         content.title = "🏆 Achievement Unlocked!"
@@ -214,12 +249,11 @@ final class NotificationManager: NSObject {
             trigger: trigger
         )
 
-        center.add(request) { error in
-            if let error = error {
-                Logger.shared.error("Failed to send news notification: \(error)", category: .general)
-            } else {
-                Logger.shared.info("News notification sent for \(articleCount) articles", category: .general)
-            }
+        do {
+            try await center.add(request)
+            Logger.shared.info("News notification sent for \(articleCount) articles", category: .general)
+        } catch {
+            Logger.shared.error("Failed to send news notification: \(error)", category: .general)
         }
     }
 

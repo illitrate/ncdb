@@ -94,9 +94,35 @@ NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design lang
 
 ### Export Your Collection
 - **Website export wizard**: generate a complete static HTML website from your collection with customisable templates, optional poster images, and automatic CSS styling
-- **FTP auto-publish**: upload your generated site directly to a web server
+- **FTP auto-publish**: upload your generated site straight to a web server over FTP or FTPS
 - **JSON/CSV export** of your full database for backup or analysis
 - Privacy controls let you exclude reviews from exports
+
+### Sync Across Your Devices
+
+- Your library, ratings, reviews, rankings, watch history and achievements sync through **CloudKit**
+- Start a ranking on your iPhone and finish it on your iPad
+- Ranking order is reconciled automatically when two devices have been edited independently
+- The news cache stays local — it's re-fetchable, so there's no sense syncing it
+
+### Ask Your Phone
+
+- **App Intents** throughout: mark a film watched, rate it, ask what your top Cage film is
+- Works from Siri, Spotlight, Shortcuts and the Action Button, without opening the app
+- Interactive widgets, including an **Up Next** widget with a Watched button
+- Lock Screen widgets, and a configurable Top Rankings widget
+
+### On-Device Intelligence
+
+- **"What should I watch tonight?"** picks from your watchlist, shaped by your mood and what you've rated highly
+- News articles are categorised on device
+- Runs entirely through **FoundationModels** — nothing about your library is sent anywhere, and it degrades gracefully where Apple Intelligence isn't available
+
+### Track How You Watch
+
+- **Viewing diary** with a year-at-a-glance calendar and a habits view for streaks and totals
+- Log a viewing with date, location, who you watched with, mood and notes
+- **Custom tags** — "Comfort Movies", "So Bad It's Good", whatever you like — with colours and filtering
 
 ### Personalise Everything
 - TMDb API key management with sync status
@@ -111,13 +137,16 @@ NCDB is a native iOS app built with SwiftUI and Apple's Liquid Glass design lang
 | Layer | Technology |
 |---|---|
 | **UI** | SwiftUI with Liquid Glass design components |
-| **Persistence** | SwiftData (SQLite) with automatic migration |
+| **Persistence** | SwiftData with a versioned schema and migration plan |
+| **Sync** | CloudKit — your library follows you across devices; the news cache stays local |
 | **Architecture** | MVVM with `@Observable` ViewModels |
 | **Networking** | URLSession with rate limiting (4 req/sec) |
 | **Image Caching** | Custom memory + disk cache with `CachedAsyncImage` |
 | **News** | RSS feed parsing from 7 sources with relevance scoring |
 | **Security** | Keychain for credentials, no plaintext secrets |
-| **Concurrency** | `@MainActor` isolation, Swift structured concurrency |
+| **Concurrency** | Swift 6 language mode, actor-isolated caching and feed parsing |
+| **Intelligence** | On-device via FoundationModels — nothing leaves the device |
+| **System integration** | App Intents, Siri, Spotlight, Shortcuts, `ncdb://` deep links |
 
 ---
 
@@ -149,14 +178,17 @@ NCDB follows a **dark-and-gold** visual language inspired by cinema:
 ## Requirements
 
 - iOS 26.0+
-- Xcode (latest with iOS 26 SDK)
-- A free [TMDb API key](https://www.themoviedb.org/settings/api)
+- Xcode 26 or later
+- A free [TMDb API key](https://www.themoviedb.org/settings/api) — a v3 API key or a v4 Read Access Token
+- An iCloud account, if you want sync (everything works without one)
 
 ---
 
 ## Data Attribution
 
 Movie metadata, posters, and images are provided by [The Movie Database (TMDb)](https://www.themoviedb.org/). This product uses the TMDb API but is not endorsed or certified by TMDb.
+
+NCDB is an independent fan project. It is not affiliated with, endorsed by, or sponsored by Nicolas Cage or his representatives. All film titles, images and trade marks belong to their respective owners.
 
 ---
 

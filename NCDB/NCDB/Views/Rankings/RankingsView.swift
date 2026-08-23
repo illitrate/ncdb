@@ -18,27 +18,7 @@ struct RankingsView: View {
 
     /// Apply content filtering to productions
     private var filteredProductions: [Production] {
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        return productions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        productions.contentFiltered
     }
 
     enum ViewMode {
@@ -116,10 +96,16 @@ struct RankingsView: View {
                     .pickerStyle(.segmented)
                     .padding(.horizontal, Spacing.md)
                     .padding(.vertical, Spacing.sm)
-                    .background(.ultraThinMaterial)
+                    .glassEffect(.regular, in: .capsule)
+                    .padding(.horizontal, Spacing.md)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: AppEvents.shared.pendingRankingAdjustment?.token) { _, newValue in
+                guard newValue != nil,
+                      let production = AppEvents.shared.consumePendingRankingAdjustment() else { return }
+                viewModel.autoAdjustRankingOnRatingChange(production)
+            }
             .navigationDestination(for: Production.self) { production in
                 MovieDetailView(production: production)
             }

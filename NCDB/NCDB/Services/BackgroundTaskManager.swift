@@ -9,7 +9,12 @@ import Foundation
 import BackgroundTasks
 import SwiftData
 
-/// Manages background tasks for news refresh and cache maintenance
+/// Registers and runs NCDB's background work: refreshing the news feed and
+/// trimming caches.
+///
+/// The identifiers below must stay in step with `BGTaskSchedulerPermittedIdentifiers`
+/// in NCDB/Info.plist — registering an identifier that isn't declared there raises
+/// an exception at launch.
 @MainActor
 final class BackgroundTaskManager {
     static let shared = BackgroundTaskManager()
@@ -18,30 +23,47 @@ final class BackgroundTaskManager {
 
     // MARK: - Task Identifiers
 
-    private let newsRefreshTaskIdentifier = "com.ncdb.newsrefresh"
-    private let cacheMaintenanceTaskIdentifier = "com.ncdb.cachemaintenance"
+    static let newsRefreshTaskIdentifier = "com.ncdb.newsrefresh"
+    static let cacheMaintenanceTaskIdentifier = "com.ncdb.cachemaintenance"
+
+    /// The container background work reads and writes through. Set at launch.
+    private weak var modelContainer: ModelContainer?
+
+    private var isRegistered = false
 
     // MARK: - Registration
 
-    /// Register background tasks
-    func registerBackgroundTasks() {
-        // Register news refresh task
+    /// Register handlers. Must be called during app launch, before the first
+    /// scene connects, and exactly once per process.
+    func registerBackgroundTasks(container: ModelContainer) {
+        modelContainer = container
+
+        guard !isRegistered else { return }
+        isRegistered = true
+
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: newsRefreshTaskIdentifier,
+            forTaskWithIdentifier: Self.newsRefreshTaskIdentifier,
             using: nil
         ) { task in
-            Task {
-                await self.handleNewsRefreshTask(task as! BGAppRefreshTask)
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            MainActor.assumeIsolated {
+                self.handle(refreshTask)
             }
         }
 
-        // Register cache maintenance task
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: cacheMaintenanceTaskIdentifier,
+            forTaskWithIdentifier: Self.cacheMaintenanceTaskIdentifier,
             using: nil
         ) { task in
-            Task {
-                await self.handleCacheMaintenanceTask(task as! BGProcessingTask)
+            guard let processingTask = task as? BGProcessingTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            MainActor.assumeIsolated {
+                self.handle(processingTask)
             }
         }
 
@@ -50,153 +72,174 @@ final class BackgroundTaskManager {
 
     // MARK: - Scheduling
 
-    /// Schedule news refresh
+    /// Schedule the next news refresh, honouring the user's chosen frequency.
     func scheduleNewsRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: newsRefreshTaskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 15 * 60) // 15 minutes
+        let frequency = NewsCacheManager.shared.scrapeFrequency
 
-        do {
-            try BGTaskScheduler.shared.submit(request)
-            Logger.shared.info("News refresh scheduled", category: .general)
-        } catch {
-            Logger.shared.error("Failed to schedule news refresh: \(error)", category: .general)
+        guard frequency != .manual else {
+            cancelNewsRefresh()
+            Logger.shared.info("News refresh set to manual — nothing scheduled", category: .general)
+            return
         }
+
+        let request = BGAppRefreshTaskRequest(identifier: Self.newsRefreshTaskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: frequency.timeInterval)
+
+        submit(request, describedAs: "news refresh")
     }
 
-    /// Schedule cache maintenance
+    /// Schedule the next cache maintenance pass.
     func scheduleCacheMaintenance() {
-        let request = BGProcessingTaskRequest(identifier: cacheMaintenanceTaskIdentifier)
-        request.earliestBeginDate = Date(timeIntervalSinceNow: 60 * 60) // 1 hour
+        let request = BGProcessingTaskRequest(identifier: Self.cacheMaintenanceTaskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: 24 * 60 * 60)
         request.requiresNetworkConnectivity = false
         request.requiresExternalPower = false
 
-        do {
-            try BGTaskScheduler.shared.submit(request)
-            Logger.shared.info("Cache maintenance scheduled", category: .general)
-        } catch {
-            Logger.shared.error("Failed to schedule cache maintenance: \(error)", category: .general)
-        }
+        submit(request, describedAs: "cache maintenance")
     }
 
-    /// Schedule all background tasks
+    /// Schedule everything the user has enabled.
     func scheduleAllTasks() {
         scheduleNewsRefresh()
         scheduleCacheMaintenance()
     }
 
-    /// Cancel all background tasks
+    func cancelNewsRefresh() {
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.newsRefreshTaskIdentifier)
+    }
+
     func cancelAllTasks() {
-        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: newsRefreshTaskIdentifier)
-        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: cacheMaintenanceTaskIdentifier)
+        BGTaskScheduler.shared.cancelAllTaskRequests()
         Logger.shared.info("All background tasks cancelled", category: .general)
     }
 
-    // MARK: - Task Handlers
+    /// Submit a request, reporting a failure rather than swallowing it.
+    private func submit(_ request: BGTaskRequest, describedAs description: String) {
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            Logger.shared.info("Scheduled \(description)", category: .general)
+        } catch let error as BGTaskScheduler.Error {
+            // .notPermitted is expected in the simulator and when Background App
+            // Refresh is off in Settings; it is not a bug in the app.
+            switch error.code {
+            case .notPermitted:
+                Logger.shared.info("Background \(description) not permitted (Background App Refresh is off, or this is the Simulator)", category: .general)
+            case .tooManyPendingTaskRequests:
+                Logger.shared.warning("Background \(description) already pending", category: .general)
+            case .unavailable:
+                Logger.shared.info("Background \(description) unavailable on this device", category: .general)
+            default:
+                Logger.shared.error("Couldn't schedule \(description): \(error)", category: .general)
+            }
+        } catch {
+            Logger.shared.error("Couldn't schedule \(description): \(error)", category: .general)
+        }
+    }
 
-    private func handleNewsRefreshTask(_ task: BGAppRefreshTask) async {
-        Logger.shared.info("Starting background news refresh...", category: .general)
+    // MARK: - Handlers
 
-        // Schedule next refresh
+    private func handle(_ task: BGAppRefreshTask) {
+        Logger.shared.info("Background news refresh started", category: .general)
+
+        // Queue the next one before doing any work, so a failure here doesn't
+        // end the chain.
         scheduleNewsRefresh()
 
-        // Create model container for background task
-        let container = try? ModelContainer(
-            for: NewsArticle.self, Production.self, WatchEvent.self,
-            Achievement.self, CustomTag.self, CastMember.self,
-            ExternalRating.self, ExportTemplate.self,
-            UserPreferences.self
-        )
-
-        guard let modelContext = container?.mainContext else {
+        guard let context = modelContext else {
             task.setTaskCompleted(success: false)
             return
         }
 
-        // Set expiration handler
-        task.expirationHandler = {
-            Logger.shared.warning("News refresh task expired", category: .general)
-            task.setTaskCompleted(success: false)
-        }
+        let work = Task { @MainActor in
+            let articles = await NewsScraperService.shared.fetchAllNews(modelContext: context)
 
-        do {
-            // Fetch news
-            let articles = await NewsScraperService.shared.fetchAllNews(modelContext: modelContext)
+            try Task.checkCancellation()
 
-            // Send notification if new articles found
-            if !articles.isEmpty {
+            if !articles.isEmpty, NewsCacheManager.shared.newsNotificationsEnabled {
                 await NotificationManager.shared.sendNewsNotification(articleCount: articles.count)
             }
 
-            // Perform cache maintenance
-            NewsCacheManager.shared.performMaintenance(modelContext: modelContext)
+            NewsCacheManager.shared.recordFetch()
+            NewsCacheManager.shared.performMaintenance(modelContext: context)
 
-            Logger.shared.info("Background news refresh completed: \(articles.count) articles", category: .general)
-            task.setTaskCompleted(success: true)
+            Logger.shared.info("Background news refresh finished: \(articles.count) articles", category: .general)
+        }
 
-        } catch {
-            Logger.shared.error("Background news refresh failed: \(error)", category: .general)
-            task.setTaskCompleted(success: false)
+        // The system reclaims the task if we run long; stop cleanly.
+        task.expirationHandler = {
+            Logger.shared.warning("News refresh expired — cancelling", category: .general)
+            work.cancel()
+        }
+
+        Task { @MainActor in
+            let succeeded = await work.result.isSuccess
+            task.setTaskCompleted(success: succeeded)
         }
     }
 
-    private func handleCacheMaintenanceTask(_ task: BGProcessingTask) async {
-        Logger.shared.info("Starting background cache maintenance...", category: .general)
+    private func handle(_ task: BGProcessingTask) {
+        Logger.shared.info("Background cache maintenance started", category: .general)
 
-        // Schedule next maintenance
         scheduleCacheMaintenance()
 
-        // Create model container
-        let container = try? ModelContainer(
-            for: NewsArticle.self, Production.self, WatchEvent.self,
-            Achievement.self, CustomTag.self, CastMember.self,
-            ExternalRating.self, ExportTemplate.self,
-            UserPreferences.self
-        )
-
-        guard let modelContext = container?.mainContext else {
+        guard let context = modelContext else {
             task.setTaskCompleted(success: false)
             return
         }
 
-        // Set expiration handler
-        task.expirationHandler = {
-            Logger.shared.warning("Cache maintenance task expired", category: .general)
-            task.setTaskCompleted(success: false)
+        let work = Task { @MainActor in
+            NewsCacheManager.shared.performMaintenance(modelContext: context)
+            try Task.checkCancellation()
+            await ImageCacheManager.shared.trimDiskCacheIfNeeded()
+            Logger.shared.info("Background cache maintenance finished", category: .general)
         }
 
-        // Perform maintenance
-        NewsCacheManager.shared.performMaintenance(modelContext: modelContext)
+        task.expirationHandler = {
+            Logger.shared.warning("Cache maintenance expired — cancelling", category: .general)
+            work.cancel()
+        }
 
-        // Also trim image cache if needed
-        await ImageCacheManager.shared.trimDiskCacheIfNeeded()
-
-        Logger.shared.info("Background cache maintenance completed", category: .general)
-        task.setTaskCompleted(success: true)
+        Task { @MainActor in
+            let succeeded = await work.result.isSuccess
+            task.setTaskCompleted(success: succeeded)
+        }
     }
 
-    // MARK: - Manual Execution (for testing)
+    private var modelContext: ModelContext? {
+        modelContainer?.mainContext
+    }
 
-    /// Manually execute news refresh (for testing in simulator)
+    // MARK: - Manual Execution
+
+    /// Run the news refresh immediately. Used by pull-to-refresh and by the
+    /// Simulator, where the scheduler never fires.
     func executeNewsRefreshNow(modelContext: ModelContext) async {
-        Logger.shared.info("Manually executing news refresh...", category: .general)
+        Logger.shared.info("Running news refresh now...", category: .general)
 
         let articles = await NewsScraperService.shared.fetchAllNews(modelContext: modelContext)
 
-        if !articles.isEmpty {
+        if !articles.isEmpty, NewsCacheManager.shared.newsNotificationsEnabled {
             await NotificationManager.shared.sendNewsNotification(articleCount: articles.count)
         }
 
+        NewsCacheManager.shared.recordFetch()
         NewsCacheManager.shared.performMaintenance(modelContext: modelContext)
 
-        Logger.shared.info("Manual news refresh completed: \(articles.count) articles", category: .general)
+        Logger.shared.info("News refresh finished: \(articles.count) articles", category: .general)
     }
 
-    /// Manually execute cache maintenance (for testing)
+    /// Run cache maintenance immediately.
     func executeCacheMaintenanceNow(modelContext: ModelContext) {
-        Logger.shared.info("Manually executing cache maintenance...", category: .general)
-
         NewsCacheManager.shared.performMaintenance(modelContext: modelContext)
+        Logger.shared.info("Cache maintenance finished", category: .general)
+    }
+}
 
-        Logger.shared.info("Manual cache maintenance completed", category: .general)
+// MARK: - Result Helper
+
+private extension Result where Success == Void {
+    var isSuccess: Bool {
+        if case .success = self { return true }
+        return false
     }
 }

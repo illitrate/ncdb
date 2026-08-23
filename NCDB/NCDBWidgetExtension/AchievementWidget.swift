@@ -67,6 +67,7 @@ struct AchievementEntry: TimelineEntry {
             completionPercentage: 35.0,
             averageRating: 4.2,
             topRankedMovies: [],
+            upNext: [],
             recentAchievements: [
                 .init(title: "First Watch", icon: "play.circle.fill", unlockedAt: Date()),
                 .init(title: "Marathon Runner", icon: "figure.run", unlockedAt: Date()),

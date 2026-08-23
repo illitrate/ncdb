@@ -22,90 +22,80 @@ final class AchievementProgressTracker {
 
     // MARK: - Tracking Control
 
-    /// Start monitoring for achievement unlocks
+    /// Snapshot of the event counters last acted on.
+    private var seenWatchVersion = 0
+    private var seenRatingVersion = 0
+    private var seenExportVersion = 0
+    private var seenShareVersion = 0
+
+    /// Start monitoring for achievement unlocks.
+    ///
+    /// Observes `AppEvents` rather than NotificationCenter — the old selectors
+    /// were wired to names that stopped being posted, and three of the five were
+    /// never posted at all.
     func startTracking() {
         guard !isTracking else { return }
         isTracking = true
 
+        let events = AppEvents.shared
+        seenWatchVersion = events.watchStateVersion
+        seenRatingVersion = events.ratingVersion
+        seenExportVersion = events.dataExportedVersion
+        seenShareVersion = events.rankingsSharedVersion
+
+        observeEvents()
+
         Logger.shared.info("Achievement tracking started", category: .general)
-
-        // Subscribe to relevant notifications
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleWatchEvent),
-            name: .productionWatchedStatusChanged,
-            object: nil
-        )
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleRatingChanged),
-            name: .productionRatingChanged,
-            object: nil
-        )
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleRankingChanged),
-            name: .rankingsUpdated,
-            object: nil
-        )
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleDataExported),
-            name: .dataExported,
-            object: nil
-        )
-
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleRankingShared),
-            name: .rankingsShared,
-            object: nil
-        )
     }
 
-    /// Stop monitoring
+    /// Stop monitoring.
     func stopTracking() {
         guard isTracking else { return }
         isTracking = false
 
-        NotificationCenter.default.removeObserver(self)
         checkTask?.cancel()
 
         Logger.shared.info("Achievement tracking stopped", category: .general)
     }
 
+    /// Watch the event counters, then re-arm — `withObservationTracking` fires once.
+    private func observeEvents() {
+        guard isTracking else { return }
+
+        let events = AppEvents.shared
+
+        withObservationTracking {
+            _ = events.watchStateVersion
+            _ = events.ratingVersion
+            _ = events.dataExportedVersion
+            _ = events.rankingsSharedVersion
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.handleEventChange()
+                self?.observeEvents()
+            }
+        }
+    }
+
     // MARK: - Event Handlers
 
-    @objc private func handleWatchEvent(_ notification: Notification) {
-        Task {
-            await checkAchievements()
-        }
-    }
+    private func handleEventChange() {
+        let events = AppEvents.shared
 
-    @objc private func handleRatingChanged(_ notification: Notification) {
-        Task {
-            await checkAchievements()
+        if events.watchStateVersion != seenWatchVersion || events.ratingVersion != seenRatingVersion {
+            seenWatchVersion = events.watchStateVersion
+            seenRatingVersion = events.ratingVersion
+            Task { await checkAchievements() }
         }
-    }
 
-    @objc private func handleRankingChanged(_ notification: Notification) {
-        Task {
-            await checkAchievements()
+        if events.dataExportedVersion != seenExportVersion {
+            seenExportVersion = events.dataExportedVersion
+            Task { try? await AchievementManager.shared.manuallyUnlock(achievementID: "data_export") }
         }
-    }
 
-    @objc private func handleDataExported(_ notification: Notification) {
-        Task {
-            try? await AchievementManager.shared.manuallyUnlock(achievementID: "data_export")
-        }
-    }
-
-    @objc private func handleRankingShared(_ notification: Notification) {
-        Task {
-            try? await AchievementManager.shared.manuallyUnlock(achievementID: "share_rankings")
+        if events.rankingsSharedVersion != seenShareVersion {
+            seenShareVersion = events.rankingsSharedVersion
+            Task { try? await AchievementManager.shared.manuallyUnlock(achievementID: "share_rankings") }
         }
     }
 
@@ -267,16 +257,6 @@ final class AchievementProgressTracker {
             )
         }
     }
-}
-
-// MARK: - Notification Extensions
-
-extension Notification.Name {
-    static let productionWatchedStatusChanged = Notification.Name("productionWatchedStatusChanged")
-    static let productionRatingChanged = Notification.Name("productionRatingChanged")
-    static let rankingsUpdated = Notification.Name("rankingsUpdated")
-    static let dataExported = Notification.Name("dataExported")
-    static let rankingsShared = Notification.Name("rankingsShared")
 }
 
 // MARK: - Helper Types

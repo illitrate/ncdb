@@ -112,33 +112,9 @@ final class DataManager {
         return try context.fetch(descriptor)
     }
 
-    /// Fetch productions with user filter preferences applied
+    /// Fetch productions with the user's content filter applied
     func fetchFilteredProductions() throws -> [Production] {
-        let allProductions = try fetchAllProductions()
-
-        // Get filter preferences from UserDefaults
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        // Apply filters
-        return allProductions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        try fetchAllProductions().contentFiltered
     }
 
     /// Fetch productions with predicate
@@ -292,10 +268,7 @@ final class DataManager {
 
         let event = WatchEvent(production: production, watchedAt: date, location: location, notes: notes)
 
-        production.watchEvents.append(event)
-        production.watched = true
-        production.dateWatched = date
-        production.watchCount += 1
+        production.addWatchEvent(event)
 
         try save()
     }
@@ -368,7 +341,8 @@ final class DataManager {
             throw DataManagerError.notConfigured
         }
 
-        // Delete all entities
+        // Delete all entities. Order matters only for readability — the cascade
+        // rules on Production already take its children with it.
         try context.delete(model: WatchEvent.self)
         try context.delete(model: ExternalRating.self)
         try context.delete(model: CastMember.self)
@@ -376,6 +350,8 @@ final class DataManager {
         try context.delete(model: Production.self)
         try context.delete(model: NewsArticle.self)
         try context.delete(model: Achievement.self)
+        try context.delete(model: ExportTemplate.self)
+        try context.delete(model: UserPreferences.self)
 
         try save()
     }

@@ -40,13 +40,7 @@ struct NCDBHeaderView: View {
             .padding(.horizontal, Spacing.md)
             .padding(.vertical, Spacing.sm)
             .frame(height: 60)
-            .background(.ultraThinMaterial)
-            .overlay(
-                Rectangle()
-                    .frame(height: 0.5)
-                    .foregroundStyle(.white.opacity(0.1)),
-                alignment: .bottom
-            )
+            .glassEffect(.regular, in: .rect)
         }
         .buttonStyle(ScaleButtonStyle())
         .accessibilityLabel("About NCDB")

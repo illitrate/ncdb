@@ -7,8 +7,11 @@
 
 import Foundation
 
-/// Service for uploading websites via FTP/SFTP
-/// Note: Full implementation would require a third-party library like NMSSH
+/// Uploads an exported website to an FTP or FTPS server.
+///
+/// Backed by `FTPClient`, a real Network.framework implementation. Every method
+/// here reaches the network — nothing is simulated, and a failure is reported
+/// as a failure.
 @MainActor
 final class FTPService {
     static let shared = FTPService()
@@ -17,114 +20,139 @@ final class FTPService {
 
     private init() {}
 
-    // MARK: - Upload
+    // MARK: - Progress
 
-    /// Upload website directory to FTP server
-    func uploadWebsite(from localURL: URL) async throws {
-        Logger.shared.info("Starting FTP upload...", category: .general)
+    /// Files uploaded so far, and the total, while an upload is running.
+    private(set) var uploadProgress: (completed: Int, total: Int)?
 
-        // Validate configuration
+    // MARK: - Configuration
+
+    private func makeClientConfiguration() throws -> FTPClient.Configuration {
         let validation = config.validateFTPConfig()
         guard validation.isValid else {
             throw FTPError.invalidConfiguration(validation.errorMessage ?? "Invalid configuration")
         }
 
-        // In a real implementation, this would:
-        // 1. Connect to FTP server using configuration
-        // 2. Navigate to target directory
-        // 3. Upload all files recursively
-        // 4. Handle errors and retries
-        // 5. Verify uploads
+        guard let password = config.getFTPPassword(), !password.isEmpty else {
+            throw FTPError.invalidConfiguration("No password saved for this server.")
+        }
 
-        // For now, simulate upload
-        try await simulateUpload(from: localURL)
-
-        Logger.shared.info("FTP upload completed", category: .general)
-
-        // Record successful export
-        config.recordExport(
-            movieCount: 0, // Would get actual count
-            success: true,
-            destination: "\(config.ftpHost)\(config.ftpPath)"
+        return FTPClient.Configuration(
+            host: config.ftpHost,
+            port: config.ftpPort,
+            username: config.ftpUsername,
+            password: password,
+            useTLS: config.useFTPS,
+            remotePath: config.ftpPath
         )
+    }
+
+    // MARK: - Upload
+
+    /// Upload an exported website directory to the configured server.
+    func uploadWebsite(from localURL: URL) async throws {
+        Logger.shared.info("Starting FTP upload to \(config.ftpHost)...", category: .general)
+
+        let clientConfiguration = try makeClientConfiguration()
+        let client = FTPClient(configuration: clientConfiguration)
+
+        uploadProgress = (0, 0)
+        defer { uploadProgress = nil }
+
+        do {
+            try await client.connect()
+        } catch {
+            config.recordExport(movieCount: 0, success: false, destination: "\(config.ftpHost)\(config.ftpPath)")
+            throw FTPError.connectionFailed(error.localizedDescription)
+        }
+
+        do {
+            let fileCount = try FTPClient.enumerateFiles(in: localURL).count
+            uploadProgress = (0, fileCount)
+
+            // The callback fires from the FTP actor, so hop back explicitly.
+            try await client.uploadDirectory(localURL) { completed, total in
+                Task { @MainActor in
+                    FTPService.shared.uploadProgress = (completed, total)
+                }
+            }
+
+            await client.disconnect()
+
+            Logger.shared.info("FTP upload completed: \(fileCount) files", category: .general)
+
+            config.recordExport(
+                movieCount: fileCount,
+                success: true,
+                destination: "\(config.ftpHost)\(config.ftpPath)"
+            )
+        } catch {
+            await client.disconnect()
+            config.recordExport(movieCount: 0, success: false, destination: "\(config.ftpHost)\(config.ftpPath)")
+            throw FTPError.uploadFailed(error.localizedDescription)
+        }
     }
 
     // MARK: - Connection Testing
 
-    /// Test FTP connection with current configuration
+    /// Test the configured server by logging in and opening the publish directory.
     func testConnection() async -> Result<String, FTPError> {
-        Logger.shared.info("Testing FTP connection...", category: .general)
+        Logger.shared.info("Testing FTP connection to \(config.ftpHost)...", category: .general)
 
-        // Validate configuration
-        let validation = config.validateFTPConfig()
-        guard validation.isValid else {
-            return .failure(.invalidConfiguration(validation.errorMessage ?? "Invalid configuration"))
-        }
-
-        // Simulate connection test
         do {
-            try await Task.sleep(for: .seconds(1))
-
-            // In real implementation, would attempt to:
-            // 1. Connect to server
-            // 2. Authenticate
-            // 3. List directory
-            // 4. Disconnect
-
-            let message = "Successfully connected to \(config.ftpHost)"
+            let clientConfiguration = try makeClientConfiguration()
+            let message = try await FTPClient.verify(configuration: clientConfiguration)
             Logger.shared.info(message, category: .general)
             return .success(message)
-
+        } catch let error as FTPError {
+            Logger.shared.error("FTP test failed: \(error.localizedDescription)", category: .general)
+            return .failure(error)
         } catch {
+            Logger.shared.error("FTP test failed: \(error.localizedDescription)", category: .general)
             return .failure(.connectionFailed(error.localizedDescription))
         }
     }
 
     // MARK: - File Operations
 
-    /// List files in remote directory
+    /// List files in a remote directory.
     func listRemoteFiles(path: String? = nil) async throws -> [RemoteFile] {
         let targetPath = path ?? config.ftpPath
+        let clientConfiguration = try makeClientConfiguration()
+        let client = FTPClient(configuration: clientConfiguration)
 
-        Logger.shared.info("Listing files at: \(targetPath)", category: .general)
+        try await client.connect()
+        defer { Task { await client.disconnect() } }
 
-        // Simulate file listing
-        try await Task.sleep(for: .milliseconds(500))
+        let names = try await client.list(path: targetPath.isEmpty ? "/" : targetPath)
 
-        return [
-            RemoteFile(name: "index.html", size: 12456, modifiedDate: Date(), isDirectory: false),
-            RemoteFile(name: "assets", size: 0, modifiedDate: Date(), isDirectory: true)
-        ]
+        return names.map { name in
+            RemoteFile(
+                name: (name as NSString).lastPathComponent,
+                size: 0,
+                modifiedDate: nil,
+                isDirectory: !(name as NSString).lastPathComponent.contains(".")
+            )
+        }
     }
 
-    /// Delete file or directory from remote server
+    /// Delete a file from the remote server.
     func deleteRemoteFile(_ filename: String, at path: String? = nil) async throws {
         let targetPath = path ?? config.ftpPath
-        Logger.shared.info("Deleting \(filename) at \(targetPath)", category: .general)
+        let remotePath = targetPath.isEmpty ? filename : "\(targetPath)/\(filename)"
 
-        // Simulate deletion
-        try await Task.sleep(for: .milliseconds(300))
-    }
+        let clientConfiguration = try makeClientConfiguration()
+        let client = FTPClient(configuration: clientConfiguration)
 
-    // MARK: - Private Methods
+        try await client.connect()
+        defer { Task { await client.disconnect() } }
 
-    private func simulateUpload(from localURL: URL) async throws {
-        // Get file count
-        let fileManager = FileManager.default
-        guard let enumerator = fileManager.enumerator(at: localURL, includingPropertiesForKeys: nil) else {
-            throw FTPError.uploadFailed("Failed to enumerate files")
+        let reply = try await client.command("DELE \(remotePath)")
+        guard reply.isPositive else {
+            throw FTPError.uploadFailed("Couldn't delete \(filename): \(reply.message)")
         }
 
-        var fileCount = 0
-        for case let fileURL as URL in enumerator {
-            fileCount += 1
-            Logger.shared.info("Uploading: \(fileURL.lastPathComponent)", category: .general)
-
-            // Simulate upload delay
-            try await Task.sleep(for: .milliseconds(100))
-        }
-
-        Logger.shared.info("Uploaded \(fileCount) files", category: .general)
+        Logger.shared.info("Deleted \(remotePath)", category: .general)
     }
 
     // MARK: - Supporting Types
@@ -132,7 +160,7 @@ final class FTPService {
     struct RemoteFile {
         let name: String
         let size: Int64
-        let modifiedDate: Date
+        let modifiedDate: Date?
         let isDirectory: Bool
     }
 
@@ -162,47 +190,3 @@ final class FTPService {
         }
     }
 }
-
-// MARK: - Implementation Note
-
-/*
- Full FTP/SFTP Implementation:
-
- For production use, integrate a third-party library such as:
-
- 1. NMSSH (SSH/SFTP): https://github.com/NMSSH/NMSSH
-    - pod 'NMSSH'
-    - Supports SFTP protocol
-    - SSH key authentication
-
- 2. FilesProvider: https://github.com/amosavian/FileProvider
-    - pod 'FilesProvider'
-    - Supports FTP, FTPS, SFTP
-    - Similar API to FileManager
-
- 3. SwiftFTP: Pure Swift implementation
-    - Lightweight
-    - FTP only (no SFTP)
-
- Example implementation with FilesProvider:
-
- ```swift
- import FilesProvider
-
- let credential = URLCredential(user: config.ftpUsername,
-                                password: config.getFTPPassword() ?? "",
-                                persistence: .none)
-
- let ftp = FTPFileProvider(baseURL: URL(string: "ftp://\(config.ftpHost)")!,
-                           mode: config.useSFTP ? .default : .passive,
-                           credential: credential)
-
- ftp.contentsOfDirectory(path: config.ftpPath) { contents, error in
-     // Handle directory listing
- }
-
- ftp.copyItem(localFile: localURL, to: remotePath) { error in
-     // Handle upload
- }
- ```
- */

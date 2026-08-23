@@ -20,9 +20,6 @@ final class RankingViewModel {
     /// Flag to prevent infinite loop when auto-ranking triggers rating changes
     private var isAutoRanking = false
 
-    /// Observer token for notification cleanup
-    nonisolated(unsafe) private var notificationObserver: NSObjectProtocol?
-
     /// All ranked movies sorted by position
     var rankedMovies: [Production] = []
 
@@ -37,17 +34,7 @@ final class RankingViewModel {
 
     // MARK: - Initialization
 
-    init() {
-        // Setup notification observer immediately so it's ready before user rates movies
-        setupNotificationObserver()
-    }
-
-    deinit {
-        // Clean up notification observer
-        if let observer = notificationObserver {
-            NotificationCenter.default.removeObserver(observer)
-        }
-    }
+    init() {}
 
     // MARK: - Computed Properties
 
@@ -98,22 +85,6 @@ final class RankingViewModel {
 
         isLoading = false
         Logger.shared.debug("Loaded \(ranked.count) ranked movies, \(available.count) available", category: .ui)
-    }
-
-    /// Setup notification observer for rating changes
-    private func setupNotificationObserver() {
-        // Only set up once
-        guard notificationObserver == nil else { return }
-
-        notificationObserver = NotificationCenter.default.addObserver(
-            forName: Notification.Name("autoAdjustRanking"),
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            if let movie = notification.object as? Production {
-                self?.autoAdjustRankingOnRatingChange(movie)
-            }
-        }
     }
 
     // MARK: - Ranking Operations
@@ -179,9 +150,7 @@ final class RankingViewModel {
 
             if movie.isRanked {
                 // Reorder existing ranked movie
-                if let currentIndex = rankedMovies.firstIndex(where: { $0.id == movie.id }) {
-                    reorderMovie(movie, to: newPosition - 1)  // Convert to 0-indexed
-                }
+                reorderMovie(movie, to: newPosition - 1)  // Convert to 0-indexed
             } else {
                 // Insert at calculated position
                 insertAtPosition(movie, position: newPosition)
@@ -245,9 +214,9 @@ final class RankingViewModel {
 
         updatePositions()
 
-        // Defer save to avoid blocking UI during drag
-        Task {
-            try? await dataManager.save()
+        // Defer the save so it doesn't block the drag animation.
+        Task { @MainActor in
+            try? dataManager.save()
         }
 
         HapticManager.shared.medium()
@@ -255,23 +224,35 @@ final class RankingViewModel {
 
     /// Update all ranking positions after reordering
     private func updatePositions() {
-        let totalMovies = rankedMovies.count
-
         for (index, movie) in rankedMovies.enumerated() {
             movie.rankingPosition = index + 1
+        }
 
-            // Update rating based on position (linear scale)
-            // Only update if NOT auto-ranking (to prevent infinite loop)
-            if !isAutoRanking {
-                if totalMovies > 1 {
-                    let rating = 5.0 - (Double(index) / Double(totalMovies - 1)) * 4.5
-                    // Round to 2 decimal places for precision with 100+ movies
-                    let roundedRating = (rating * 100).rounded() / 100
-                    movie.userRating = max(0.50, min(5.00, roundedRating))
-                } else {
-                    movie.userRating = 5.00  // Single movie gets max rating
-                }
+        syncDerivedRatings()
+    }
+
+    /// Keep position-derived ratings in step with the running order.
+    ///
+    /// Only films whose rating the user has never set themselves are touched.
+    /// A rating the user typed is theirs and is never rewritten by a reorder —
+    /// that behaviour destroyed user input in 1.x.
+    private func syncDerivedRatings() {
+        // Skip while auto-ranking, otherwise rating and position chase each other.
+        guard !isAutoRanking else { return }
+
+        let totalMovies = rankedMovies.count
+
+        for (index, movie) in rankedMovies.enumerated() where !movie.ratingIsUserSet {
+            guard totalMovies > 1 else {
+                movie.userRating = 5.00  // Single movie gets max rating
+                continue
             }
+
+            // Linear scale from 5.0 at the top to 0.5 at the bottom,
+            // rounded to 2dp for precision with 100+ movies.
+            let rating = 5.0 - (Double(index) / Double(totalMovies - 1)) * 4.5
+            let roundedRating = (rating * 100).rounded() / 100
+            movie.userRating = max(0.50, min(5.00, roundedRating))
         }
     }
 

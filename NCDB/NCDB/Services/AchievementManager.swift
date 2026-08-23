@@ -451,7 +451,7 @@ final class AchievementManager {
         currentStreak: Int
     ) -> Bool {
         let watchedProductions = productions.filter { $0.watched }
-        let rankedProductions = productions.filter { ($0.rankingPosition ?? 0) > 0 }
+        let rankedProductions = productions.filter(\.isRanked)
 
         switch definition.requirement {
         case .watchCount(let count):
@@ -591,10 +591,15 @@ final class AchievementManager {
 
         Logger.shared.info("Achievement unlocked: \(definition.title)", category: .general)
 
-        // Post notification for UI updates
-        NotificationCenter.default.post(
-            name: .achievementUnlocked,
-            object: definition.id
+        // In-app toast
+        AppEvents.shared.achievementUnlocked(id: definition.id)
+
+        // System notification. This was never wired up — the scheduling method
+        // existed but had no caller anywhere in the app.
+        NotificationManager.shared.scheduleAchievementNotification(
+            title: definition.title,
+            description: definition.description,
+            achievementId: definition.id
         )
     }
 
@@ -616,7 +621,7 @@ final class AchievementManager {
         currentStreak: Int
     ) -> Double {
         let watchedProductions = productions.filter { $0.watched }
-        let rankedProductions = productions.filter { ($0.rankingPosition ?? 0) > 0 }
+        let rankedProductions = productions.filter(\.isRanked)
 
         switch definition.requirement {
         case .watchCount(let count):

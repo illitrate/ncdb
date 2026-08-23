@@ -128,12 +128,50 @@ struct AboutView: View {
                         .padding(.horizontal, Spacing.xl)
                     }
 
+                    Divider()
+                        .background(Color.white.opacity(0.2))
+                        .padding(.horizontal, Spacing.xl)
+
+                    // Attribution and status
+                    VStack(alignment: .leading, spacing: Spacing.md) {
+                        // TMDb's terms require this attribution to appear in the
+                        // app itself, not only in the repository README.
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("Data by TMDb")
+                                .font(Typography.bodyBold)
+                                .foregroundStyle(Color.primaryText)
+
+                            Text("Film data, posters and images are provided by The Movie Database. This product uses the TMDb API but is not endorsed or certified by TMDb.")
+                                .font(Typography.caption1)
+                                .foregroundStyle(Color.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Link("themoviedb.org", destination: URL(string: "https://www.themoviedb.org")!)
+                                .font(Typography.caption1)
+                                .tint(Color.cageGold)
+                        }
+
+                        VStack(alignment: .leading, spacing: Spacing.xs) {
+                            Text("Unofficial")
+                                .font(Typography.bodyBold)
+                                .foregroundStyle(Color.primaryText)
+
+                            Text("NCDB is an independent fan project. It is not affiliated with, endorsed by, or sponsored by Nicolas Cage or his representatives. All film titles, images and trade marks belong to their respective owners.")
+                                .font(Typography.caption1)
+                                .foregroundStyle(Color.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, Spacing.xl)
+                    .padding(.top, Spacing.md)
+
                     // Footer
                     VStack(spacing: Spacing.xs) {
                         Text("Version \(viewModel.fullVersionString)")
                             .font(Typography.caption1)
                             .foregroundStyle(Color.tertiaryText)
-                        Text("©2025 illitrate Publichason Ltd.")
+                        Text("©2026 illitrate Publichasions")
                             .font(Typography.caption1)
                             .foregroundStyle(Color.tertiaryText)
 

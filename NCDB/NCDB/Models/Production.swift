@@ -7,14 +7,14 @@ import SwiftData
 // MARK: - Production (Movie/TV Show)
 @Model
 final class Production: Hashable {
-    @Attribute(.unique) var id: UUID
-    var title: String
-    var releaseYear: Int
+    var id: UUID = UUID()
+    var title: String = ""
+    var releaseYear: Int = 0
     var tmdbID: Int?
 
     // Type & Classification
-    var productionType: ProductionType
-    var genres: [String]
+    var productionType: ProductionType = ProductionType.movie
+    var genres: [String] = []
 
     // Visual Assets
     var posterPath: String?
@@ -36,6 +36,10 @@ final class Production: Hashable {
     var watched: Bool = false
     var dateWatched: Date?
     var userRating: Double?
+    /// True when the user set `userRating` themselves. Ratings derived from a
+    /// ranking position leave this false, so a manual rating is never
+    /// overwritten by a reorder. See RankingViewModel.syncDerivedRatings().
+    var ratingIsUserSet: Bool = false
     var review: String?
     var quotes: String? // Stores favourite quotes (one per line)
     var isFavorite: Bool = false
@@ -43,10 +47,18 @@ final class Production: Hashable {
     var watchCount: Int = 0
 
     // Relationships
-    @Relationship(deleteRule: .cascade) var castMembers: [CastMember] = []
-    @Relationship(deleteRule: .cascade) var watchEvents: [WatchEvent] = []
-    @Relationship(deleteRule: .cascade) var externalRatings: [ExternalRating] = []
-    @Relationship(inverse: \CustomTag.productions) var tags: [CustomTag] = []
+    // CloudKit requires every relationship to be optional and to declare its
+    // inverse explicitly, so these are spelled out rather than inferred.
+    @Relationship(deleteRule: .cascade, inverse: \CastMember.production)
+    var castMembers: [CastMember]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \WatchEvent.production)
+    var watchEvents: [WatchEvent]? = []
+
+    @Relationship(deleteRule: .cascade, inverse: \ExternalRating.production)
+    var externalRatings: [ExternalRating]? = []
+    @Relationship(inverse: \CustomTag.productions)
+    var tags: [CustomTag]? = []
 
     // Sync & Cache
     var metadataFetched: Bool = false
@@ -84,6 +96,57 @@ extension Production {
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
+    }
+}
+
+// MARK: - Relationship Accessors
+
+/// CloudKit requires to-many relationships to be optional, which would
+/// otherwise force `?? []` into every call site. These keep the reading code
+/// unchanged and give mutation a single place to live.
+extension Production {
+
+    var cast: [CastMember] {
+        castMembers ?? []
+    }
+
+    var watchHistory: [WatchEvent] {
+        watchEvents ?? []
+    }
+
+    var ratings: [ExternalRating] {
+        externalRatings ?? []
+    }
+
+    var appliedTags: [CustomTag] {
+        tags ?? []
+    }
+
+    /// Record a viewing and keep the derived counters in step.
+    func addWatchEvent(_ event: WatchEvent) {
+        watchEvents = watchHistory + [event]
+        watched = true
+        dateWatched = event.watchedAt
+        watchCount = watchHistory.count
+    }
+
+    /// Remove the most recent viewing, returning it.
+    @discardableResult
+    func removeLastWatchEvent() -> WatchEvent? {
+        var history = watchHistory.sorted { $0.watchedAt < $1.watchedAt }
+        let removed = history.popLast()
+        watchEvents = history
+        watchCount = history.count
+        return removed
+    }
+
+    func addTag(_ tag: CustomTag) {
+        guard !appliedTags.contains(where: { $0.id == tag.id }) else { return }
+        tags = appliedTags + [tag]
+    }
+
+    func removeTag(_ tag: CustomTag) {
+        tags = appliedTags.filter { $0.id != tag.id }
     }
 }
 

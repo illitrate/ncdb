@@ -68,6 +68,7 @@ struct StatsEntry: TimelineEntry {
             completionPercentage: 35.0,
             averageRating: 4.2,
             topRankedMovies: [],
+            upNext: [],
             recentAchievements: [],
             lastUpdated: Date()
         )

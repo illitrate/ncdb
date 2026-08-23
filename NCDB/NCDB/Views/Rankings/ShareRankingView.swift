@@ -46,6 +46,13 @@ struct ShareRankingView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.cageGold)
+                .simultaneousGesture(
+                    // Unlocks the "share_rankings" achievement, which had no
+                    // trigger before. ShareLink offers no completion callback.
+                    TapGesture().onEnded {
+                        AppEvents.shared.rankingsShared()
+                    }
+                )
                 .padding(.horizontal, Spacing.lg)
             }
             .padding(.vertical, Spacing.md)

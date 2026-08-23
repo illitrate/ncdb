@@ -142,19 +142,18 @@ struct AchievementToastModifier: ViewModifier {
                     .zIndex(999)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .achievementUnlocked)) { notification in
-            guard let definition = notification.object as? AchievementDefinition else { return }
+        .onChange(of: AppEvents.shared.latestUnlockedAchievement?.id) { _, newValue in
+            guard newValue != nil,
+                  let definition = AppEvents.shared.latestUnlockedAchievement else { return }
 
-            // If already showing a toast, queue this one
+            // If a toast is already up, let it finish first.
             if showToast {
                 Task {
                     try? await Task.sleep(for: .seconds(3.5))
-                    await showAchievementToast(definition)
+                    showAchievementToast(definition)
                 }
             } else {
-                Task {
-                    await showAchievementToast(definition)
-                }
+                showAchievementToast(definition)
             }
         }
     }

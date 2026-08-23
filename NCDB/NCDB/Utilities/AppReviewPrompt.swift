@@ -56,7 +56,7 @@ final class AppReviewPrompt {
         Logger.shared.info("Requesting app review", category: .general)
 
         if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-            SKStoreReviewController.requestReview(in: scene)
+            AppStore.requestReview(in: scene)
             UserDefaults.standard.set(Date(), forKey: lastReviewPromptDateKey)
         }
     }
@@ -70,7 +70,7 @@ final class AppReviewPrompt {
             try? await Task.sleep(for: .seconds(2))
 
             if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
-                SKStoreReviewController.requestReview(in: scene)
+                AppStore.requestReview(in: scene)
                 UserDefaults.standard.set(Date(), forKey: lastReviewPromptDateKey)
             }
         }

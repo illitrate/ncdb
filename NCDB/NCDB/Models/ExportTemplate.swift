@@ -7,15 +7,15 @@ import SwiftData
 // MARK: - Export Template
 @Model
 final class ExportTemplate {
-    @Attribute(.unique) var id: UUID
-    var name: String
-    var exportType: ExportType
+    var id: UUID = UUID()
+    var name: String = ""
+    var exportType: ExportType = ExportType.html
     var htmlTemplate: String?
     var cssStyles: String?
     var includeImages: Bool = true
     var includeRatings: Bool = true
     var includeReviews: Bool = true
-    var dateCreated: Date
+    var dateCreated: Date = Date()
 
     init(name: String, type: ExportType) {
         self.id = UUID()

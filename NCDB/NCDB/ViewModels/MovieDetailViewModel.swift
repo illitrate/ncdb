@@ -62,56 +62,43 @@ final class MovieDetailViewModel {
             watchEvent.rating = currentRating
         }
 
-        production.watchEvents.append(watchEvent)
-
-        // Update production state
-        production.watched = true
-        production.dateWatched = Date()
-        production.watchCount = production.watchEvents.count
+        production.addWatchEvent(watchEvent)
 
         dataManager.saveQuietly()
         HapticManager.shared.success()
         Logger.shared.info("Marked as watched: \(production.title) (total: \(production.watchCount))", category: .ui)
 
-        // Notify achievement tracker
-        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
+        AppEvents.shared.productionWatchStateChanged()
     }
 
     /// Unmark as watched (removes the most recent watch event)
     func unmarkAsWatched() {
-        guard !production.watchEvents.isEmpty else { return }
+        guard !production.watchHistory.isEmpty else { return }
 
-        // Remove the most recent watch event
-        if let lastEvent = production.watchEvents.last {
-            production.watchEvents.removeLast()
-        }
+        production.removeLastWatchEvent()
 
-        // Update production state
-        production.watchCount = production.watchEvents.count
-        if production.watchEvents.isEmpty {
+        if production.watchHistory.isEmpty {
             production.watched = false
             production.dateWatched = nil
 
             // Clear rating and remove from rankings when fully unwatched
             production.userRating = 0
+            production.ratingIsUserSet = false
             editedRating = 0
         } else {
-            production.dateWatched = production.watchEvents.last?.watchedAt
+            production.dateWatched = production.watchHistory
+                .max { $0.watchedAt < $1.watchedAt }?.watchedAt
         }
 
         dataManager.saveQuietly()
         HapticManager.shared.buttonTap()
         Logger.shared.info("Unmarked as watched: \(production.title) (remaining: \(production.watchCount))", category: .ui)
 
-        // Notify achievement tracker
-        NotificationCenter.default.post(name: .productionWatchedStatusChanged, object: nil)
+        AppEvents.shared.productionWatchStateChanged()
 
         // Remove from rankings if fully unwatched
         if production.watchCount == 0 {
-            NotificationCenter.default.post(
-                name: Notification.Name("autoAdjustRanking"),
-                object: production
-            )
+            AppEvents.shared.requestRankingAdjustment(for: production)
         }
     }
 
@@ -131,6 +118,8 @@ final class MovieDetailViewModel {
     /// Save rating
     func saveRating() {
         production.userRating = editedRating
+        // The user chose this value, so ranking reorders must not overwrite it.
+        production.ratingIsUserSet = editedRating > 0
 
         // If rating >= 0.5 and not already watched, automatically mark as watched
         if editedRating >= 0.5 && !production.watched {
@@ -143,14 +132,10 @@ final class MovieDetailViewModel {
         HapticManager.shared.success()
         Logger.shared.info("Updated rating for: \(production.title) to \(editedRating)", category: .ui)
 
-        // Notify achievement tracker
-        NotificationCenter.default.post(name: .productionRatingChanged, object: nil)
+        AppEvents.shared.productionRatingChanged()
 
         // Auto-adjust ranking based on new rating
-        NotificationCenter.default.post(
-            name: Notification.Name("autoAdjustRanking"),
-            object: production
-        )
+        AppEvents.shared.requestRankingAdjustment(for: production)
     }
 
     /// Cancel rating edit
@@ -192,23 +177,34 @@ final class MovieDetailViewModel {
         editedQuotes = production.quotes ?? ""
     }
 
-    /// Add to ranking
+    /// Add to ranking, appended after everything already ranked.
     func addToRanking() {
-        // Find the next ranking position
-        // This would need access to all productions to determine the position
-        // For now, we'll just set it to the watchCount as a placeholder
-        production.rankingPosition = production.watchCount > 0 ? production.watchCount : 1
+        guard !production.isRanked else { return }
+
+        let ranked = (try? dataManager.fetchRankedProductions()) ?? []
+        let nextPosition = (ranked.compactMap(\.rankingPosition).max() ?? 0) + 1
+
+        production.rankingPosition = nextPosition
         dataManager.saveQuietly()
         HapticManager.shared.success()
-        Logger.shared.info("Added to ranking: \(production.title)", category: .ui)
+        Logger.shared.info("Added to ranking: \(production.title) at position \(nextPosition)", category: .ui)
+
+        // Let the rankings screen renumber and pick up the change.
+        AppEvents.shared.requestRankingAdjustment(for: production)
     }
 
-    /// Remove from ranking
+    /// Remove from ranking. `nil` is the only value that means "unranked" —
+    /// writing 0 here left films counted as ranked on some screens and not others.
     func removeFromRanking() {
-        production.rankingPosition = 0
+        guard production.isRanked else { return }
+
+        production.rankingPosition = nil
         dataManager.saveQuietly()
         HapticManager.shared.success()
         Logger.shared.info("Removed from ranking: \(production.title)", category: .ui)
+
+        // Renumber whatever is left.
+        AppEvents.shared.requestRankingAdjustment(for: production)
     }
 
     // MARK: - Computed Properties
@@ -258,7 +254,7 @@ final class MovieDetailViewModel {
 
     /// Check if movie is ranked
     var isRanked: Bool {
-        (production.rankingPosition ?? 0) > 0
+        production.isRanked
     }
 
     /// Poster URL

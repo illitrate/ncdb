@@ -14,6 +14,8 @@ enum HomeNavigationDestination: Hashable {
     case achievements
     case news
     case stats
+    case watchCalendar
+    case watchStats
 }
 
 /// Home/Dashboard view
@@ -24,59 +26,21 @@ struct HomeView: View {
     @Query(sort: \NewsArticle.publishedDate, order: .reverse) private var newsArticles: [NewsArticle]
     @State private var viewModel = HomeViewModel()
     @State private var showAbout = false
+    @State private var path = NavigationPath()
+    @State private var showRecommendation = false
 
     /// Apply content filtering to productions
     private var filteredProductions: [Production] {
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        return productions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        productions.contentFiltered
     }
 
     /// Apply content filtering to watchlist (unwatched productions)
     private var filteredWatchlist: [Production] {
-        let hideNonActing = UserDefaults.standard.bool(forKey: "hideNonActingAppearances")
-        let hideDocumentaries = UserDefaults.standard.bool(forKey: "hideDocumentaries")
-
-        return unwatchedProductions.filter { production in
-            // If manually included, always show
-            if production.manuallyIncluded {
-                return true
-            }
-
-            // Apply non-acting filter
-            if hideNonActing && production.isNonActingAppearance {
-                return false
-            }
-
-            // Apply documentary filter
-            if hideDocumentaries && production.productionType == .documentary {
-                return false
-            }
-
-            return true
-        }
+        unwatchedProductions.contentFiltered
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: Spacing.lg) {
                     // Greeting
@@ -89,7 +53,7 @@ struct HomeView: View {
                     .padding(.horizontal, Spacing.md)
 
                     // Quick Stats (tap to view full stats)
-                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: Spacing.md) {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: Spacing.md)], spacing: Spacing.md) {
                         NavigationLink(value: HomeNavigationDestination.stats) {
                             StatCard(
                                 title: "Watched",
@@ -174,6 +138,64 @@ struct HomeView: View {
                         }
                     }
 
+                    // What should I watch tonight — on-device pick
+                    Button {
+                        showRecommendation = true
+                    } label: {
+                        HStack(spacing: Spacing.sm) {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(Color.cageGold)
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("What Should I Watch?")
+                                    .font(.headline)
+                                    .foregroundStyle(Color.primaryText)
+                                Text("A pick from your watchlist, chosen on device")
+                                    .font(.caption)
+                                    .foregroundStyle(Color.secondaryText)
+                            }
+
+                            Spacer()
+
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(Color.tertiaryText)
+                        }
+                        .padding(Spacing.md)
+                        .glassEffect(.regular, in: .rect(cornerRadius: Sizes.cornerRadiusMedium))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, Spacing.md)
+
+                    // Viewing Diary
+                    //
+                    // WatchCalendarView and WatchStatsView were written, compiled
+                    // and unreachable — nothing in the app linked to either.
+                    VStack(alignment: .leading, spacing: Spacing.sm) {
+                        SectionHeader(title: "Viewing Diary")
+
+                        HStack(spacing: Spacing.md) {
+                            NavigationLink(value: HomeNavigationDestination.watchCalendar) {
+                                DiaryTile(
+                                    title: "Calendar",
+                                    subtitle: "Your year in viewings",
+                                    icon: "calendar",
+                                    color: .cageGold
+                                )
+                            }
+
+                            NavigationLink(value: HomeNavigationDestination.watchStats) {
+                                DiaryTile(
+                                    title: "Habits",
+                                    subtitle: "Streaks and totals",
+                                    icon: "flame.fill",
+                                    color: .orange
+                                )
+                            }
+                        }
+                        .padding(.horizontal, Spacing.md)
+                    }
+
                     // Watchlist Preview
                     if !filteredWatchlist.isEmpty {
                         VStack(alignment: .leading, spacing: Spacing.sm) {
@@ -246,6 +268,11 @@ struct HomeView: View {
                     }
                 }
             }
+            .onChange(of: AppRouter.shared.pendingHomeDestination) { _, destination in
+                guard let destination else { return }
+                path.append(destination)
+                AppRouter.shared.pendingHomeDestination = nil
+            }
             .navigationDestination(for: HomeNavigationDestination.self) { destination in
                 switch destination {
                 case .watchlist:
@@ -256,6 +283,14 @@ struct HomeView: View {
                     NewsView()
                 case .stats:
                     StatsView()
+                case .watchCalendar:
+                    WatchCalendarView()
+                        .navigationTitle("Watch Calendar")
+                        .navigationBarTitleDisplayMode(.inline)
+                case .watchStats:
+                    WatchStatsView()
+                        .navigationTitle("Viewing Habits")
+                        .navigationBarTitleDisplayMode(.inline)
                 }
             }
             .navigationDestination(for: Production.self) { production in
@@ -267,6 +302,9 @@ struct HomeView: View {
             .refreshable {
                 await viewModel.loadDashboardData(productions: filteredProductions)
             }
+        }
+        .sheet(isPresented: $showRecommendation) {
+            RecommendationView(productions: filteredProductions)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
@@ -295,5 +333,35 @@ struct HomeView: View {
 
     private var recentNews: [NewsArticle] {
         Array(newsArticles.prefix(3))
+    }
+}
+
+// MARK: - Diary Tile
+
+/// Entry point tile for the viewing diary screens.
+private struct DiaryTile: View {
+    let title: String
+    let subtitle: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Spacing.xs) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(color)
+
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(Color.primaryText)
+
+            Text(subtitle)
+                .font(.caption)
+                .foregroundStyle(Color.secondaryText)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Spacing.md)
+        .glassEffect(.regular, in: .rect(cornerRadius: Sizes.cornerRadiusMedium))
     }
 }

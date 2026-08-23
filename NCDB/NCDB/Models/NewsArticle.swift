@@ -8,20 +8,24 @@ import SwiftData
 @Model
 final class NewsArticle {
     // MARK: - Identity
-    @Attribute(.unique) var id: UUID
-    @Attribute(.unique) var url: String // Original article URL
+    // Neither of these can be unique any more — CloudKit rejects unique
+    // constraints. `url` uniqueness previously made refresh an upsert, which
+    // was itself a bug (it wiped isRead/isFavorite); NewsScraperService has
+    // done an explicit lookup since 2.0, so nothing depends on it.
+    var id: UUID = UUID()
+    var url: String = "" // Original article URL
 
     // MARK: - Content
-    var title: String
+    var title: String = ""
     var summary: String?
     var fullContent: String? // If we scrape the full article
     var imageURL: String?
 
     // MARK: - Metadata
-    var source: String // e.g., "Google News", "Variety"
+    var source: String = "" // e.g., "Google News", "Variety"
     var author: String?
-    var publishedDate: Date
-    var scrapedDate: Date
+    var publishedDate: Date = Date()
+    var scrapedDate: Date = Date()
 
     // MARK: - User Interaction
     var isRead: Bool = false

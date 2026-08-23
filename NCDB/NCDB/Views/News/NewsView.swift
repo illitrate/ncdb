@@ -160,15 +160,11 @@ struct NewsView: View {
 
         isRefreshing = true
 
-        do {
-            let _ = await scraperService.fetchAllNews(modelContext: modelContext)
-            cacheManager.recordFetch()
+        let newArticles = await scraperService.fetchAllNews(modelContext: modelContext)
+        cacheManager.recordFetch()
 
-            HapticManager.shared.success()
-        } catch {
-            Logger.shared.error("Failed to refresh news: \(error)", category: .general)
-            HapticManager.shared.error()
-        }
+        Logger.shared.info("Pull-to-refresh brought in \(newArticles.count) new articles", category: .general)
+        HapticManager.shared.success()
 
         isRefreshing = false
     }

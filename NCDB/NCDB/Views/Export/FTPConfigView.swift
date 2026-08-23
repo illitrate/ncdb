@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-/// Configuration view for FTP/SFTP upload settings
+/// Configuration view for FTP/FTPS upload settings
 struct FTPConfigView: View {
     @Environment(\.dismiss) private var dismiss
 
@@ -16,7 +16,7 @@ struct FTPConfigView: View {
     @State private var ftpUsername: String
     @State private var ftpPassword: String
     @State private var ftpPath: String
-    @State private var useSFTP: Bool
+    @State private var useFTPS: Bool
 
     @State private var isTesting = false
     @State private var testResult: Result<String, FTPService.FTPError>?
@@ -31,7 +31,7 @@ struct FTPConfigView: View {
         _ftpUsername = State(initialValue: ExportConfigurationManager.shared.ftpUsername)
         _ftpPassword = State(initialValue: ExportConfigurationManager.shared.getFTPPassword() ?? "")
         _ftpPath = State(initialValue: ExportConfigurationManager.shared.ftpPath)
-        _useSFTP = State(initialValue: ExportConfigurationManager.shared.useSFTP)
+        _useFTPS = State(initialValue: ExportConfigurationManager.shared.useFTPS)
     }
 
     var body: some View {
@@ -104,7 +104,7 @@ struct FTPConfigView: View {
                 .font(.system(size: 48))
                 .foregroundStyle(Color.cageGold)
 
-            Text("FTP/SFTP Configuration")
+            Text("FTP Configuration")
                 .font(.title3)
                 .fontWeight(.bold)
                 .foregroundStyle(Color.primaryText)
@@ -129,18 +129,18 @@ struct FTPConfigView: View {
             GlassCard {
                 HStack {
                     VStack(alignment: .leading, spacing: Spacing.xxs) {
-                        Text("Use SFTP")
+                        Text("Use FTPS")
                             .font(.headline)
                             .foregroundStyle(Color.primaryText)
 
-                        Text("Secure FTP over SSH (recommended)")
+                        Text("Encrypted connection over TLS, usually port 990 (recommended)")
                             .font(.caption)
                             .foregroundStyle(Color.secondaryText)
                     }
 
                     Spacer()
 
-                    Toggle("", isOn: $useSFTP)
+                    Toggle("", isOn: $useFTPS)
                         .tint(Color.cageGold)
                 }
                 .padding()
@@ -182,7 +182,7 @@ struct FTPConfigView: View {
                         .keyboardType(.numberPad)
 
                     Button {
-                        ftpPort = useSFTP ? 22 : 21
+                        ftpPort = useFTPS ? 990 : 21
                     } label: {
                         Text("Default")
                             .font(.caption)
@@ -401,7 +401,7 @@ struct FTPConfigView: View {
         configManager.ftpPort = ftpPort
         configManager.ftpUsername = ftpUsername
         configManager.ftpPath = ftpPath
-        configManager.useSFTP = useSFTP
+        configManager.useFTPS = useFTPS
 
         if !ftpPassword.isEmpty {
             configManager.saveFTPPassword(ftpPassword)

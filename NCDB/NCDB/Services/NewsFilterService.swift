@@ -16,7 +16,7 @@ final class NewsFilterService {
 
     // MARK: - Relevance Keywords
 
-    private let highRelevanceKeywords = [
+    nonisolated static let highRelevanceKeywords = [
         "nicolas cage",
         "nic cage",
         "cage stars",
@@ -24,7 +24,7 @@ final class NewsFilterService {
         "cage will star"
     ]
 
-    private let mediumRelevanceKeywords = [
+    nonisolated static let mediumRelevanceKeywords = [
         "national treasure",
         "face/off",
         "con air",
@@ -37,73 +37,121 @@ final class NewsFilterService {
         "unbearable weight"
     ]
 
-    private let lowRelevanceKeywords = [
+    nonisolated static let lowRelevanceKeywords = [
         "cage",
         "actor"
     ]
 
-    // MARK: - Filtering
+    // MARK: - Scoring
 
-    /// Filter articles for relevance
-    func filterRelevantArticles(_ articles: [NewsArticle]) -> [NewsArticle] {
-        let scored = articles.map { article in
-            (article: article, score: calculateRelevanceScore(article))
-        }
-
-        // Filter out low-relevance articles (score < 1)
-        let relevant = scored.filter { $0.score >= 1 }
-
-        // Sort by score descending, then by date
-        let sorted = relevant.sorted { lhs, rhs in
-            if lhs.score != rhs.score {
-                return lhs.score > rhs.score
+    /// Score parsed feed items, drop the irrelevant ones, and order by relevance.
+    ///
+    /// Operates on plain values so it can run before any model object exists.
+    nonisolated static func scoreAndFilter(_ articles: [ParsedArticle]) -> [ScoredArticle] {
+        articles
+            .map { article in
+                ScoredArticle(
+                    parsed: article,
+                    score: relevanceScore(title: article.title, summary: article.summary, publishedDate: article.publishedDate),
+                    keywordScore: keywordScore(title: article.title, summary: article.summary),
+                    category: category(title: article.title, summary: article.summary)
+                )
             }
-            return lhs.article.publishedDate > rhs.article.publishedDate
-        }
-
-        return sorted.map { $0.article }
+            // Relevance must come from the content. Recency only breaks ties —
+            // filtering on the combined score let any article published in the
+            // last 24 hours through on the recency bonus alone.
+            .filter { $0.keywordScore >= 1 }
+            .sorted { lhs, rhs in
+                if lhs.score != rhs.score { return lhs.score > rhs.score }
+                return lhs.parsed.publishedDate > rhs.parsed.publishedDate
+            }
     }
 
-    /// Calculate relevance score for an article
-    func calculateRelevanceScore(_ article: NewsArticle) -> Int {
-        let content = "\(article.title) \(article.summary ?? "")".lowercased()
+    /// Instance shim so existing call sites keep reading naturally.
+    func scoreAndFilter(_ articles: [ParsedArticle]) -> [ScoredArticle] {
+        Self.scoreAndFilter(articles)
+    }
 
+    /// How much of the article is actually about Nicolas Cage, from content alone.
+    ///
+    /// This is what decides whether an article is kept. It deliberately excludes
+    /// the recency bonus, which is an ordering signal, not evidence of relevance.
+    nonisolated static func keywordScore(title: String, summary: String?) -> Int {
+        let content = "\(title) \(summary ?? "")".lowercased()
         var score = 0
 
-        // High relevance keywords: +3 points each
-        for keyword in highRelevanceKeywords {
-            if content.contains(keyword.lowercased()) {
-                score += 3
-            }
+        for keyword in highRelevanceKeywords where content.contains(keyword) {
+            score += 3
+        }
+        for keyword in mediumRelevanceKeywords where content.contains(keyword) {
+            score += 2
+        }
+        for keyword in lowRelevanceKeywords where content.contains(keyword) {
+            score += 1
         }
 
-        // Medium relevance keywords: +2 points each
-        for keyword in mediumRelevanceKeywords {
-            if content.contains(keyword.lowercased()) {
-                score += 2
-            }
-        }
-
-        // Low relevance keywords: +1 point each
-        for keyword in lowRelevanceKeywords {
-            if content.contains(keyword.lowercased()) {
-                score += 1
-            }
-        }
-
-        // Bonus for "Nicolas Cage" in title: +2 points
-        if article.title.lowercased().contains("nicolas cage") ||
-           article.title.lowercased().contains("nic cage") {
+        // Named in the headline rather than buried in the body.
+        let lowercasedTitle = title.lowercased()
+        if lowercasedTitle.contains("nicolas cage") || lowercasedTitle.contains("nic cage") {
             score += 2
         }
 
-        // Recency bonus: +1 for articles less than 24 hours old
-        let dayAgo = Date().addingTimeInterval(-24 * 60 * 60)
-        if article.publishedDate > dayAgo {
+        return score
+    }
+
+    /// Ordering score: relevance plus a nudge for fresh news.
+    nonisolated static func relevanceScore(title: String, summary: String?, publishedDate: Date) -> Int {
+        var score = keywordScore(title: title, summary: summary)
+
+        // Fresh news outranks equally relevant older news.
+        if publishedDate > Date().addingTimeInterval(-24 * 60 * 60) {
             score += 1
         }
 
         return score
+    }
+
+    /// Best-effort category from the headline and summary.
+    ///
+    /// Keyword matching, deliberately conservative — anything it can't place
+    /// stays `.general` rather than being mislabelled.
+    nonisolated static func category(title: String, summary: String?) -> ArticleCategory {
+        let content = "\(title) \(summary ?? "")".lowercased()
+
+        let rules: [(ArticleCategory, [String])] = [
+            (.casting, ["cast as", "joins the cast", "casting", "set to star", "will star", "signs on", "in talks to star"]),
+            (.newMovie, ["announced", "greenlit", "first look", "release date", "begins production", "starts filming", "wraps filming", "trailer"]),
+            (.boxOffice, ["box office", "opening weekend", "grossed", "debut weekend", "ticket sales"]),
+            (.award, ["oscar", "academy award", "golden globe", "nominated", "nomination", "wins best", "bafta", "sag award"]),
+            (.review, ["review", "stars out of", "critics", "rotten tomatoes", "verdict"]),
+            (.interview, ["interview", "tells us", "opens up", "in conversation", "sat down with", "on why he"]),
+            (.personal, ["married", "divorce", "birthday", "family", "son ", "daughter", "wife", "home in"])
+        ]
+
+        for (category, keywords) in rules where keywords.contains(where: { content.contains($0) }) {
+            return category
+        }
+
+        return .general
+    }
+
+    // MARK: - Legacy Article Helpers
+
+    /// Relevance score for an already-persisted article.
+    func calculateRelevanceScore(_ article: NewsArticle) -> Int {
+        Self.relevanceScore(title: article.title, summary: article.summary, publishedDate: article.publishedDate)
+    }
+
+    /// Filter and order persisted articles by relevance.
+    func filterRelevantArticles(_ articles: [NewsArticle]) -> [NewsArticle] {
+        articles
+            .map { ($0, calculateRelevanceScore($0)) }
+            .filter { Self.keywordScore(title: $0.0.title, summary: $0.0.summary) >= 1 }
+            .sorted { lhs, rhs in
+                if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
+                return lhs.0.publishedDate > rhs.0.publishedDate
+            }
+            .map(\.0)
     }
 
     // MARK: - Source Filtering

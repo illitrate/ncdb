@@ -15,6 +15,8 @@ struct MovieDetailView: View {
     @State private var showFullScreenPoster = false
     @State private var isEditingReview = false
     @State private var isEditingQuotes = false
+    @State private var showWatchLogger = false
+    @State private var showTagPicker = false
 
     init(production: Production) {
         self.production = production
@@ -24,7 +26,11 @@ struct MovieDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Spacing.lg) {
-                // Backdrop image
+                // Backdrop image.
+                //
+                // backgroundExtensionEffect() mirrors and blurs the artwork out
+                // under the status bar and navigation chrome, so the still bleeds
+                // to the edges instead of stopping at a hard rectangle.
                 if let backdropURL = viewModel.backdropURL {
                     CachedAsyncImage(url: backdropURL, placeholder: {
                         Color.gray.opacity(0.3)
@@ -35,6 +41,7 @@ struct MovieDetailView: View {
                     })
                     .frame(height: 200)
                     .clipped()
+                    .backgroundExtensionEffect()
                 }
 
                 VStack(spacing: Spacing.md) {
@@ -80,6 +87,21 @@ struct MovieDetailView: View {
                                             production.watched ? "Watched Again" : "Mark as Watched",
                                             systemImage: "checkmark.circle"
                                         )
+                                    }
+
+                                    // Full watch event: date, location, who with,
+                                    // mood, notes. WatchEventLogger existed but
+                                    // had no entry point anywhere in the app.
+                                    Button {
+                                        showWatchLogger = true
+                                    } label: {
+                                        Label("Log a Watch…", systemImage: "square.and.pencil")
+                                    }
+
+                                    Button {
+                                        showTagPicker = true
+                                    } label: {
+                                        Label("Tags…", systemImage: "tag")
                                     }
 
                                     if production.watched {
@@ -149,6 +171,11 @@ struct MovieDetailView: View {
                             Text(viewModel.formattedGenres)
                                 .font(.caption)
                                 .foregroundStyle(Color.tertiaryText)
+
+                            if !production.appliedTags.isEmpty {
+                                TagChipRow(tags: production.appliedTags.sorted { $0.name < $1.name })
+                                    .padding(.top, Spacing.xxs)
+                            }
 
                             if viewModel.hasBeenWatched {
                                 Label(viewModel.formattedWatchCount, systemImage: "eye.fill")
@@ -312,7 +339,7 @@ Spacer(minLength: 0)
                     }
 
                     // Cast
-                    if !production.castMembers.isEmpty {
+                    if !production.cast.isEmpty {
                         Divider()
                             .padding(.vertical, Spacing.sm)
 
@@ -331,6 +358,9 @@ Spacer(minLength: 0)
             }
         }
         .background(Color.primaryBackground)
+        // Soft scroll edge so the glass navigation bar dissolves into the
+        // artwork rather than sitting on a hard line.
+        .scrollEdgeEffectStyle(.soft, for: .top)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -341,6 +371,14 @@ Spacer(minLength: 0)
         }
         .sheet(isPresented: $showAbout) {
             AboutView()
+        }
+        .sheet(isPresented: $showWatchLogger) {
+            WatchEventLogger(production: production) {
+                showWatchLogger = false
+            }
+        }
+        .sheet(isPresented: $showTagPicker) {
+            TagPickerView(production: production)
         }
         .fullScreenCover(isPresented: $showFullScreenPoster) {
             if let posterPath = production.posterPath {
@@ -356,8 +394,6 @@ Spacer(minLength: 0)
     private func shareReview() {
         guard let review = production.review, !review.isEmpty else { return }
 
-        let tmdbURL = URL(string: "https://www.themoviedb.org/movie/\(production.tmdbID)")!
-
         var reviewText = "My Review of \(production.title) (\(production.releaseYear))\n"
 
         if let rating = production.userRating, rating > 0 {
@@ -367,11 +403,22 @@ Spacer(minLength: 0)
         }
 
         reviewText += review
-        reviewText += "\n\nWatch on TMDb: \(tmdbURL.absoluteString)"
+
+        // Only link out when we actually know the TMDb id — interpolating the
+        // optional directly produced ".../movie/Optional(1234)".
+        let tmdbURL = production.tmdbID.flatMap {
+            URL(string: "https://www.themoviedb.org/movie/\($0)")
+        }
+
+        if let tmdbURL {
+            reviewText += "\n\nWatch on TMDb: \(tmdbURL.absoluteString)"
+        }
         reviewText += "\n\n#NicolasCage #NCDB"
 
+        let activityItems: [Any] = tmdbURL.map { [reviewText, $0] } ?? [reviewText]
+
         let activityVC = UIActivityViewController(
-            activityItems: [reviewText, tmdbURL],
+            activityItems: activityItems,
             applicationActivities: nil
         )
 
@@ -407,9 +454,9 @@ struct CastSection: View {
 
     private var displayedCast: [CastMember] {
         if showAllCast {
-            return production.castMembers.sorted { $0.order < $1.order }
+            return production.cast.sorted { $0.order < $1.order }
         } else {
-            return Array(production.castMembers.sorted { $0.order < $1.order }.prefix(10))
+            return Array(production.cast.sorted { $0.order < $1.order }.prefix(10))
         }
     }
 
@@ -427,13 +474,13 @@ struct CastSection: View {
 
                 Spacer()
 
-                if production.castMembers.count > 10 {
+                if production.cast.count > 10 {
                     Button {
                         withAnimation {
                             showAllCast.toggle()
                         }
                     } label: {
-                        Text(showAllCast ? "Show Less" : "Show All (\(production.castMembers.count))")
+                        Text(showAllCast ? "Show Less" : "Show All (\(production.cast.count))")
                             .font(.caption)
                             .foregroundStyle(.cageGold)
                     }

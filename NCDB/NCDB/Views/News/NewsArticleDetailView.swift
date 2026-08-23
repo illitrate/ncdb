@@ -117,9 +117,11 @@ struct NewsArticleDetailView: View {
     // MARK: - Actions
 
     private func openArticle() {
-        if let url = URL(string: article.url) {
-            showingSafari = true
+        guard URL(string: article.url) != nil else {
+            Logger.shared.warning("Article has an unusable URL: \(article.url)", category: .general)
+            return
         }
+        showingSafari = true
     }
 
     private func shareArticle() {
