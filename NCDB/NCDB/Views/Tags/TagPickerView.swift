@@ -175,20 +175,32 @@ struct TagPickerView: View {
 // MARK: - Tag Chips
 
 /// Horizontal row of a production's tags.
+///
+/// Grouped in a `GlassEffectContainer` with a shared union id, so adjacent
+/// chips fuse into a single glass shape instead of reading as separate pills —
+/// and adding or removing a tag morphs the shape rather than popping.
 struct TagChipRow: View {
     let tags: [CustomTag]
 
+    @Namespace private var tagSpace
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: Spacing.xs) {
-                ForEach(tags) { tag in
-                    TagChip(
-                        text: tag.name,
-                        color: tag.color,
-                        icon: tag.icon ?? "tag.fill"
-                    )
+            GlassEffectContainer(spacing: 12) {
+                HStack(spacing: Spacing.xs) {
+                    ForEach(tags) { tag in
+                        TagChip(
+                            text: tag.name,
+                            color: tag.color,
+                            icon: tag.icon ?? "tag.fill"
+                        )
+                        .glassEffect(.regular.tint(tag.color.opacity(0.5)), in: .capsule)
+                        .glassEffectUnion(id: "tags", namespace: tagSpace)
+                        .glassEffectID(tag.id, in: tagSpace)
+                    }
                 }
             }
+            .animation(.spring(duration: 0.35), value: tags.map(\.id))
         }
     }
 }

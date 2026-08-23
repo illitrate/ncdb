@@ -321,7 +321,7 @@ struct ExportPreviewView: View {
     private func openInFinder() {
         #if targetEnvironment(simulator)
         // On simulator, just print the path
-        print("Website location: \(websiteURL.path)")
+        Logger.shared.info("Website location: \(websiteURL.path)", category: .general)
         #else
         // On device, open in Files app
         UIApplication.shared.open(websiteURL)

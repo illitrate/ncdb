@@ -159,23 +159,35 @@ struct PodiumView: View {
     let second: Production?
     let third: Production?
 
+    /// Shared namespace so the position badges are treated as one glass system
+    /// and morph into each other when the order changes, rather than each
+    /// popping independently.
+    @Namespace private var podium
+
     var body: some View {
-        HStack(alignment: .bottom, spacing: Spacing.md) {
-            // Second place
-            if let second = second {
-                PodiumItem(production: second, position: 2, height: 120, color: .gray)
-            }
+        // Spacing here is the *merge* distance: badges closer than this fuse
+        // into a single glass shape.
+        GlassEffectContainer(spacing: 24) {
+            HStack(alignment: .bottom, spacing: Spacing.md) {
+                // Second place
+                if let second = second {
+                    PodiumItem(production: second, position: 2, height: 120, color: .gray, namespace: podium)
+                }
 
-            // First place
-            if let first = first {
-                PodiumItem(production: first, position: 1, height: 160, color: .cageGold)
-            }
+                // First place
+                if let first = first {
+                    PodiumItem(production: first, position: 1, height: 160, color: .cageGold, namespace: podium)
+                }
 
-            // Third place
-            if let third = third {
-                PodiumItem(production: third, position: 3, height: 100, color: .orange)
+                // Third place
+                if let third = third {
+                    PodiumItem(production: third, position: 3, height: 100, color: .orange, namespace: podium)
+                }
             }
         }
+        .animation(.spring(duration: 0.45), value: first?.id)
+        .animation(.spring(duration: 0.45), value: second?.id)
+        .animation(.spring(duration: 0.45), value: third?.id)
     }
 }
 
@@ -184,6 +196,7 @@ struct PodiumItem: View {
     let position: Int
     let height: CGFloat
     let color: Color
+    let namespace: Namespace.ID
 
     private var posterURL: URL? {
         guard let posterPath = production.posterPath else { return nil }
@@ -203,13 +216,15 @@ struct PodiumItem: View {
                 .clipShape(RoundedRectangle(cornerRadius: 8))
             }
 
-            // Position badge
+            // Position badge — a glass element keyed by the film, so moving a
+            // film between places animates as one shape travelling rather than
+            // two badges swapping numbers.
             Text("\(position)")
                 .font(.headline.bold())
                 .foregroundStyle(.white)
                 .frame(width: 30, height: 30)
-                .background(color)
-                .clipShape(Circle())
+                .glassEffect(.regular.tint(color).interactive(), in: .circle)
+                .glassEffectID(production.id, in: namespace)
         }
         .frame(height: height)
     }

@@ -100,7 +100,7 @@ final class ImageLoader {
                 if !Task.isCancelled {
                     self.error = error
                     self.isLoading = false
-                    print("❌ Image loading failed: \(error.localizedDescription)")
+                    Logger.shared.error("Image loading failed: \(error.localizedDescription)", category: .cache)
                 }
             }
         }

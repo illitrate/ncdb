@@ -167,6 +167,46 @@ struct SuggestFilmIntent: AppIntent {
     }
 }
 
+// MARK: - Log the Next Watch
+
+/// Marks the next unwatched film as watched, with no parameter to resolve.
+///
+/// Exists for the Control Centre control and the Action Button, where there is
+/// no opportunity to prompt the user to pick a film.
+struct LogNextWatchIntent: AppIntent {
+
+    static let title: LocalizedStringResource = "Log Next Watch"
+    static let description = IntentDescription(
+        "Marks the next film on your watchlist as watched.",
+        categoryName: "Watching"
+    )
+
+    static let openAppWhenRun = false
+
+    init() {}
+
+    @MainActor
+    func perform() async throws -> some IntentResult & ProvidesDialog {
+        let title = try IntentStore.withProductions { productions -> String? in
+            guard let next = productions.first(where: { !$0.watched }) else {
+                return nil
+            }
+
+            let event = WatchEvent(production: next, watchedAt: Date())
+            next.addWatchEvent(event)
+            return next.title
+        }
+
+        guard let title else {
+            return .result(dialog: IntentDialog("You've watched everything in your library."))
+        }
+
+        WidgetCenter.shared.reloadAllTimelines()
+
+        return .result(dialog: IntentDialog("Logged a viewing of \(title)."))
+    }
+}
+
 // MARK: - App Shortcuts
 
 /// Phrases the system offers without the user building a shortcut first.

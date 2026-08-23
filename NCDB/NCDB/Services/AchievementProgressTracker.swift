@@ -172,12 +172,15 @@ final class AchievementProgressTracker {
     /// Force check achievements (useful after data import)
     func forceCheck() async {
         await performAchievementCheck()
+        await checkEarlyAdopter()
     }
 
-    /// Check early adopter achievement
+    /// Check the early adopter achievement.
+    ///
+    /// Awarded to anyone using the app within 30 days of its first release. The
+    /// window has since closed, so this no longer unlocks for new users — which
+    /// is the intent. Previously this was never called at all.
     func checkEarlyAdopter() async {
-        // Check if user started using the app within 30 days of launch
-        // For now, we'll just unlock it for all users since we don't have a launch date
         let launchDate = Calendar.current.date(from: DateComponents(year: 2025, month: 12, day: 7))!
         let thirtyDaysAfterLaunch = Calendar.current.date(byAdding: .day, value: 30, to: launchDate)!
 

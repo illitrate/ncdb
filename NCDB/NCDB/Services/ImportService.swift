@@ -63,9 +63,18 @@ final class ImportService {
 
         let exportData = try decoder.decode(ExportService.ExportData.self, from: jsonData)
 
-        // Validate version compatibility
-        // For now, we'll accept all versions, but this could be enhanced
-        Logger.shared.info("Importing data from version \(exportData.appVersion)", category: .general)
+        // Exports are forward-compatible by construction: every field the
+        // importer reads has existed since 1.0, and the decoder ignores unknown
+        // ones. A mismatch is still worth flagging in the log.
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        if exportData.appVersion != currentVersion {
+            Logger.shared.warning(
+                "Importing an export made by version \(exportData.appVersion) into \(currentVersion)",
+                category: .general
+            )
+        } else {
+            Logger.shared.info("Importing data from version \(exportData.appVersion)", category: .general)
+        }
 
         // Import productions
         try await importProductions(exportData.productions, resolution: conflictResolution)
@@ -111,9 +120,19 @@ final class ImportService {
                     mergeProduction(existing, from: productionExport)
                 }
             } else {
-                // Production doesn't exist - would need to fetch from TMDb
-                // For now, we'll skip productions that don't exist locally
-                Logger.shared.warning("Skipping import of production \(productionExport.title) - not found locally", category: .general)
+                // Not in the library — recreate it from the export rather than
+                // dropping it. Skipping meant restoring a backup onto a fresh
+                // install silently lost every film the local library didn't
+                // already contain, which is exactly when a restore matters.
+                let production = Production(
+                    title: productionExport.title,
+                    releaseYear: productionExport.releaseYear,
+                    tmdbID: tmdbID
+                )
+                updateProduction(production, from: productionExport)
+                context.insert(production)
+
+                Logger.shared.info("Imported new production: \(productionExport.title)", category: .general)
             }
         }
     }
