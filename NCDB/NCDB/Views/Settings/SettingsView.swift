@@ -202,6 +202,48 @@ struct SettingsView: View {
                         Text(viewModel.fullVersionString)
                             .foregroundStyle(.secondary)
                     }
+
+                    Button {
+                        showAbout = true
+                    } label: {
+                        LabeledContent("About NCDB") {
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .tint(.primary)
+                }
+
+                // Attribution and status. Mirrors the About screen so the
+                // required TMDb credit is reachable without knowing the logo
+                // is a button.
+                Section {
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Data by TMDb")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text("Film data, posters and images are provided by The Movie Database. This product uses the TMDb API but is not endorsed or certified by TMDb.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Link("themoviedb.org", destination: URL(string: "https://www.themoviedb.org")!)
+                            .font(.caption)
+                            .tint(.cageGold)
+                    }
+                    .padding(.vertical, Spacing.xxs)
+
+                    VStack(alignment: .leading, spacing: Spacing.xs) {
+                        Text("Unofficial")
+                            .font(.subheadline.weight(.semibold))
+
+                        Text("NCDB is an independent fan project. It is not affiliated with, endorsed by, or sponsored by Nicolas Cage or his representatives. All film titles, images and trade marks belong to their respective owners.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(.vertical, Spacing.xxs)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)

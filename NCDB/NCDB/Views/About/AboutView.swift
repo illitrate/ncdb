@@ -171,7 +171,7 @@ struct AboutView: View {
                         Text("Version \(viewModel.fullVersionString)")
                             .font(Typography.caption1)
                             .foregroundStyle(Color.tertiaryText)
-                        Text("©2025 illitrate Publichason Ltd.")
+                        Text("©2026 illitrate Publichasions")
                             .font(Typography.caption1)
                             .foregroundStyle(Color.tertiaryText)
 
