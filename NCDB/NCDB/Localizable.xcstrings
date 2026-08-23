@@ -1853,6 +1853,9 @@
         }
       }
     },
+    "Log Next Watch" : {
+
+    },
     "Log Watch" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1863,6 +1866,9 @@
           }
         }
       }
+    },
+    "Logged a viewing of %@." : {
+
     },
     "Logged another viewing of %@. That's %lld now." : {
       "extractionState" : "manual",
@@ -1962,6 +1968,9 @@
           }
         }
       }
+    },
+    "Marks the next film on your watchlist as watched." : {
+
     },
     "Month" : {
       "extractionState" : "manual",
@@ -4044,6 +4053,9 @@
           }
         }
       }
+    },
+    "You've watched everything in your library." : {
+
     },
     "Your existing library will be moved into a dated folder inside the app's storage rather than deleted, so it can still be recovered. NCDB will then start with an empty library." : {
       "extractionState" : "manual",
